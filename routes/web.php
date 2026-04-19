@@ -139,12 +139,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/notifications', \App\Livewire\Shared\Notifications::class)->name('notifications');
 });
 
-use Illuminate\Support\Facades\Artisan;
-
-Route::get('/rekebisha-storage', function () {
-    Artisan::call('storage:link');
-
-    return 'Imekamilika! Shortcut ya storage imetengenezwa kikamilifu.';
-});
-
 require __DIR__.'/settings.php';
