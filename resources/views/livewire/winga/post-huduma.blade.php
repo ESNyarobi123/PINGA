@@ -2,8 +2,8 @@
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 mb-6">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{{ __('messages.post_huduma.title') }}</h1>
-                <p class="text-zinc-600 dark:text-zinc-400">{{ __('messages.post_huduma.subtitle') }}</p>
+                <h1 class="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{{ $isEditing ? __('messages.post_huduma.edit_title') : __('messages.post_huduma.title') }}</h1>
+                <p class="text-zinc-600 dark:text-zinc-400">{{ $isEditing ? __('messages.post_huduma.edit_subtitle') : __('messages.post_huduma.subtitle') }}</p>
             </div>
             <div class="flex flex-wrap gap-2">
                 <flux:button variant="outline" :href="route('winga.huduma-zangu')" wire:navigate>{{ __('messages.post_huduma.view_list') }}</flux:button>
@@ -14,13 +14,15 @@
         </div>
     </div>
 
+    @if(! $isEditing)
     <div class="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4 mb-6">
         <p class="text-sm font-medium text-emerald-900 dark:text-emerald-100">
             {{ __('messages.post_huduma.limit_info', ['remaining' => $remaining, 'max' => $max]) }}
         </p>
     </div>
+    @endif
 
-    @if($showLimitError)
+    @if($showLimitError && ! $isEditing)
         <div class="mb-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
             <p class="font-semibold text-amber-900 dark:text-amber-100">{{ __('messages.post_huduma.at_limit_title') }}</p>
             <p class="text-sm text-amber-800 dark:text-amber-200 mt-1">{{ $limitMessage }}</p>
@@ -94,6 +96,19 @@
 
         <div>
             <flux:label>{{ __('messages.post_huduma.images_label') }}</flux:label>
+            @if($isEditing && count($existingImages) > 0)
+                <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-1 mb-2">{{ __('messages.post_huduma.existing_images_help') }}</p>
+                <div class="flex flex-wrap gap-3 mb-3">
+                    @foreach($existingImages as $index => $path)
+                        <div class="relative size-24 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0">
+                            <img src="{{ asset('storage/'.$path) }}" alt="" class="size-full object-cover">
+                            <button type="button" wire:click="removeExistingImage({{ $index }})" class="absolute top-1 end-1 size-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">
+                                ×
+                            </button>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
             <input type="file" wire:model="images" accept="image/*" multiple
                 class="mt-1 block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-winga-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-winga-700 dark:text-zinc-400" />
             @error('images')
@@ -121,8 +136,8 @@
 
         <div class="pt-2">
             <flux:button type="submit" variant="primary" :disabled="! $canPost" wire:loading.attr="disabled">
-                <span wire:loading.remove wire:target="submit">{{ __('messages.post_huduma.submit') }}</span>
-                <span wire:loading wire:target="submit">{{ __('messages.post_huduma.submit') }}…</span>
+                <span wire:loading.remove wire:target="submit">{{ $isEditing ? __('messages.post_huduma.submit_update') : __('messages.post_huduma.submit') }}</span>
+                <span wire:loading wire:target="submit">{{ $isEditing ? __('messages.post_huduma.submit_update') : __('messages.post_huduma.submit') }}…</span>
             </flux:button>
         </div>
     </form>

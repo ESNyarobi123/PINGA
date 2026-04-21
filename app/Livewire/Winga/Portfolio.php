@@ -5,6 +5,7 @@ namespace App\Livewire\Winga;
 use App\Models\Category;
 use App\Models\Portfolio as PortfolioModel;
 use App\Services\SubscriptionLimitsService;
+use App\Services\SubscriptionService;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -16,9 +17,13 @@ class Portfolio extends Component
 
     // Form fields
     public string $title = '';
+
     public string $description = '';
+
     public ?int $categoryId = null;
+
     public ?string $projectUrl = null;
+
     public $image = null;
 
     // Edit mode
@@ -26,11 +31,14 @@ class Portfolio extends Component
 
     // Limit states
     public bool $showLimitError = false;
+
     public string $limitMessage = '';
+
     public ?array $suggestedUpgrade = null;
-    
+
     // Modal state
     public bool $showUploadModal = false;
+
     public bool $is_featured = false;
 
     protected SubscriptionLimitsService $limitsService;
@@ -63,6 +71,7 @@ class Portfolio extends Component
             $this->suggestedUpgrade = $this->limitsService->getSuggestedUpgrade($user);
 
             $this->dispatch('toast', message: $this->limitMessage, type: 'error');
+
             return;
         }
 
@@ -143,8 +152,8 @@ class Portfolio extends Component
 
     public function toggleUploadModal(): void
     {
-        $this->showUploadModal = !$this->showUploadModal;
-        if (!$this->showUploadModal) {
+        $this->showUploadModal = ! $this->showUploadModal;
+        if (! $this->showUploadModal) {
             $this->resetForm();
         }
     }
@@ -180,7 +189,7 @@ class Portfolio extends Component
             'max' => $max,
             'canUpload' => $this->limitsService->canUploadPortfolio($user),
             'debug_info' => [
-                'plan_slug' => $user->activeSubscription()?->plan_slug ?? 'free',
+                'plan_slug' => app(SubscriptionService::class)->getActivePlan($user)?->plan_slug ?? 'free',
                 'limit' => $this->limitsService->getLimit($user, 'portfolio_imgs'),
                 'current_count' => $user->portfolioImages()->count(),
                 'remaining_slots' => $remaining,

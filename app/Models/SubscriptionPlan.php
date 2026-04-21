@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class SubscriptionPlan extends Model
 {
@@ -14,6 +14,7 @@ class SubscriptionPlan extends Model
         'price',
         'duration_days',
         'features',
+        'limits',
         'badge_label',
         'badge_color',
         'is_recommended',
@@ -24,12 +25,13 @@ class SubscriptionPlan extends Model
     protected function casts(): array
     {
         return [
-            'features'       => 'array',
-            'price'          => 'integer',
-            'duration_days'  => 'integer',
+            'features' => 'array',
+            'limits' => 'array',
+            'price' => 'integer',
+            'duration_days' => 'integer',
             'is_recommended' => 'boolean',
-            'is_active'      => 'boolean',
-            'sort_order'     => 'integer',
+            'is_active' => 'boolean',
+            'sort_order' => 'integer',
         ];
     }
 
@@ -45,16 +47,16 @@ class SubscriptionPlan extends Model
 
     public function formattedPrice(): string
     {
-        return 'TZS ' . number_format($this->price);
+        return 'TZS '.number_format($this->price);
     }
 
     public function durationLabel(): string
     {
         return match (true) {
             $this->duration_days >= 180 => 'Miezi 6',
-            $this->duration_days >= 90  => 'Miezi 3',
-            $this->duration_days >= 30  => 'Mwezi 1',
-            default                     => "Siku {$this->duration_days}",
+            $this->duration_days >= 90 => 'Miezi 3',
+            $this->duration_days >= 30 => 'Mwezi 1',
+            default => "Siku {$this->duration_days}",
         };
     }
 }

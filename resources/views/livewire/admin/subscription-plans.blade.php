@@ -176,6 +176,66 @@
                     </div>
                 </div>
 
+                {{-- Enforced limits (drives post-huduma, portfolio, bids, etc.) --}}
+                <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-3 bg-zinc-50 dark:bg-zinc-800/40">
+                    <p class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ __('messages.admin_sub_plans.limits_section') }}</p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">{{ __('messages.admin_sub_plans.limits_hint') }}</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.max_services') }}</label>
+                            <input type="number" wire:model="limit_max_services" min="0"
+                                   class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                            @error('limit_max_services') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.daily_bids') }}</label>
+                            <input type="number" wire:model="limit_daily_bids" min="0"
+                                   class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                            @error('limit_daily_bids') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.portfolio_imgs') }}</label>
+                            <input type="number" wire:model="limit_portfolio_imgs" min="0"
+                                   class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                            @error('limit_portfolio_imgs') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.search_boost') }}</label>
+                            <input type="number" wire:model="limit_search_boost" min="0"
+                                   class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                            @error('limit_search_boost') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.limit_analytics') }}</label>
+                            <select wire:model="limit_analytics" class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                                <option value="none">none</option>
+                                <option value="basic">basic</option>
+                                <option value="advanced">advanced</option>
+                                <option value="full">full</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">{{ __('messages.admin_sub_plans.limit_smart_match') }}</label>
+                            <select wire:model="limit_smart_match" class="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm">
+                                <option value="none">none</option>
+                                <option value="normal">normal</option>
+                                <option value="high">high</option>
+                                <option value="highest">highest</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_custom_url" class="rounded"> custom URL</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_verified_badge" class="rounded"> verified</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_chat_badge" class="rounded"> chat badge</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_top_rated_eligible" class="rounded"> top rated</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_featured_category" class="rounded"> featured</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="limit_priority_support" class="rounded"> priority support</label>
+                    </div>
+                </div>
+
                 {{-- Features --}}
                 <div>
                     <div class="flex items-center justify-between mb-2">

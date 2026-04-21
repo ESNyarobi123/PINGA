@@ -104,6 +104,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/mapato', \App\Livewire\Winga\Mapato::class)->name('mapato');
         Route::get('/tomba-ombi', \App\Livewire\Winga\TombaOmbi::class)->name('tomba-ombi');
         Route::get('/post-huduma', \App\Livewire\Winga\PostHuduma::class)->name('post-huduma');
+        Route::get('/huduma/{service}/hariri', \App\Livewire\Winga\PostHuduma::class)->name('edit-huduma');
         Route::get('/huduma-zangu', \App\Livewire\Winga\HudumaZangu::class)->name('huduma-zangu');
         Route::get('/huduma-maombi', \App\Livewire\Winga\HudumaMaombi::class)->name('huduma-maombi');
         Route::get('/weka-code', \App\Livewire\Winga\WekaCode::class)->name('weka-code');

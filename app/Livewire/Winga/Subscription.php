@@ -2,9 +2,9 @@
 
 namespace App\Livewire\Winga;
 
-use App\Models\Subscription as SubscriptionModel;
 use App\Models\SubscriptionPlan;
 use App\Services\SnippePaymentService;
+use App\Services\SubscriptionLimitsService;
 use App\Services\SubscriptionService;
 use Livewire\Component;
 
@@ -28,12 +28,12 @@ class Subscription extends Component
     public function selectPlan(int $planId): void
     {
         $this->selectedPlanId = $planId;
-        $this->showConfirm    = true;
+        $this->showConfirm = true;
     }
 
     public function cancelConfirm(): void
     {
-        $this->showConfirm    = false;
+        $this->showConfirm = false;
         $this->selectedPlanId = null;
     }
 
@@ -44,6 +44,7 @@ class Subscription extends Component
 
         if (! $plan) {
             $this->dispatch('toast', message: 'Mpango haukupatikana.', type: 'error');
+
             return;
         }
 
@@ -52,8 +53,8 @@ class Subscription extends Component
         match ($this->paymentMethod) {
             'wallet' => $this->payViaWallet($user, $plan),
             'mobile' => $this->payViaMobile($user, $plan),
-            'card'   => $this->payViaCard($user, $plan),
-            default  => $this->dispatch('toast', message: 'Njia ya malipo si sahihi.', type: 'error'),
+            'card' => $this->payViaCard($user, $plan),
+            default => $this->dispatch('toast', message: 'Njia ya malipo si sahihi.', type: 'error'),
         };
 
         $this->loading = false;
@@ -68,6 +69,7 @@ class Subscription extends Component
                 type: 'error',
             );
             $this->loading = false;
+
             return;
         }
 
@@ -75,7 +77,7 @@ class Subscription extends Component
         $service = app(SubscriptionService::class);
         $service->payFromWallet($user, $plan);
 
-        $this->showConfirm    = false;
+        $this->showConfirm = false;
         $this->selectedPlanId = null;
 
         $this->dispatch('toast',
@@ -90,10 +92,11 @@ class Subscription extends Component
         if (empty($phone)) {
             $this->dispatch('toast', message: 'Ingiza namba ya simu.', type: 'error');
             $this->loading = false;
+
             return;
         }
 
-        $orderId = 'sub-' . $user->id . '-' . $plan->slug . '-' . now()->timestamp;
+        $orderId = 'sub-'.$user->id.'-'.$plan->slug.'-'.now()->timestamp;
 
         /** @var SubscriptionService $service */
         $service = app(SubscriptionService::class);
@@ -108,9 +111,9 @@ class Subscription extends Component
             phoneNumber: $phone,
             customerData: [
                 'firstname' => $nameParts[0],
-                'lastname'  => $nameParts[1] ?? $nameParts[0],
-                'email'     => $user->email ?? 'noemail@winga.com',
-                'user_id'   => $user->id,
+                'lastname' => $nameParts[1] ?? $nameParts[0],
+                'email' => $user->email ?? 'noemail@winga.com',
+                'user_id' => $user->id,
                 'payment_type' => 'subscription',
                 'subscription_id' => $pending->id,
             ],
@@ -118,7 +121,7 @@ class Subscription extends Component
         );
 
         if ($result && isset($result['id'])) {
-            $this->showConfirm    = false;
+            $this->showConfirm = false;
             $this->selectedPlanId = null;
             $this->dispatch('toast',
                 message: 'Ombi la malipo limetumwa. Subiri USSD push kwenye simu yako. Subscription itawashwa mara malipo yanapothibitishwa.',
@@ -133,7 +136,7 @@ class Subscription extends Component
 
     private function payViaCard($user, SubscriptionPlan $plan): void
     {
-        $orderId = 'sub-card-' . $user->id . '-' . $plan->slug . '-' . now()->timestamp;
+        $orderId = 'sub-card-'.$user->id.'-'.$plan->slug.'-'.now()->timestamp;
 
         /** @var SubscriptionService $service */
         $service = app(SubscriptionService::class);
@@ -147,9 +150,9 @@ class Subscription extends Component
             amount: $plan->price,
             customerData: [
                 'firstname' => $nameParts[0],
-                'lastname'  => $nameParts[1] ?? $nameParts[0],
-                'email'     => $user->email ?? 'noemail@winga.com',
-                'user_id'   => $user->id,
+                'lastname' => $nameParts[1] ?? $nameParts[0],
+                'email' => $user->email ?? 'noemail@winga.com',
+                'user_id' => $user->id,
                 'payment_type' => 'subscription',
                 'subscription_id' => $pending->id,
             ],
@@ -168,14 +171,16 @@ class Subscription extends Component
 
     public function render()
     {
-        $user         = auth()->user();
-        $plans        = SubscriptionPlan::active()->get();
-        $activeSub    = app(SubscriptionService::class)->getActivePlan($user);
+        $user = auth()->user();
+        $plans = SubscriptionPlan::active()->get();
+        $activeSub = app(SubscriptionService::class)->getActivePlan($user);
+        $planUi = app(SubscriptionLimitsService::class)->getPlanDisplayData($user);
 
         return view('livewire.winga.subscription', [
-            'plans'     => $plans,
+            'plans' => $plans,
             'activeSub' => $activeSub,
-            'user'      => $user,
+            'planUi' => $planUi,
+            'user' => $user,
         ])
             ->layout('layouts.winga')
             ->title('Subscription — Winga Bora');

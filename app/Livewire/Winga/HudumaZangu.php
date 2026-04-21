@@ -4,12 +4,34 @@ namespace App\Livewire\Winga;
 
 use App\Models\Service;
 use App\Support\ServicePackageSchema;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class HudumaZangu extends Component
 {
     use WithPagination;
+
+    public function deleteService(int $serviceId): void
+    {
+        $user = auth()->user();
+        $service = Service::query()->where('user_id', $user->id)->whereKey($serviceId)->first();
+        if (! $service) {
+            $this->dispatch('toast', message: __('messages.huduma_zangu.delete_not_found'), type: 'error');
+
+            return;
+        }
+
+        foreach ($service->images ?? [] as $path) {
+            if (is_string($path) && $path !== '') {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        $service->delete();
+
+        $this->dispatch('toast', message: __('messages.huduma_zangu.deleted'), type: 'success');
+    }
 
     public function render()
     {

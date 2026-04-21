@@ -47,7 +47,9 @@
                         @endif
                     </div>
                     <div class="mt-4 flex flex-wrap gap-2">
+                        <flux:button size="sm" variant="primary" :href="route('winga.edit-huduma', $service)" wire:navigate>{{ __('messages.huduma_zangu.edit') }}</flux:button>
                         <flux:button size="sm" variant="outline" :href="route('winga.huduma-maombi', ['filter' => 'pending'])" wire:navigate>{{ __('messages.huduma_zangu.view_requests') }}</flux:button>
+                        <flux:button size="sm" variant="danger" wire:click="deleteService({{ $service->id }})" wire:confirm="{{ __('messages.huduma_zangu.confirm_delete') }}">{{ __('messages.huduma_zangu.delete') }}</flux:button>
                     </div>
                 </div>
             @endforeach

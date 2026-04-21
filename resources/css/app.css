@@ -92,6 +92,18 @@ select:focus[data-flux-control] {
 
 /* Winga custom utility classes */
 @layer utilities {
+    /* Flux sidebar with sticky uses overflow-y-auto; hide scrollbar but keep scrolling */
+    .flux-no-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .flux-no-scrollbar::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+
     .winga-gradient {
         @apply bg-gradient-to-r from-winga-500 to-winga-700;
     }

@@ -536,8 +536,12 @@ return [
     ],
 
     'post_huduma' => [
+        'page_title' => 'Post a service — Winga',
+        'edit_page_title' => 'Edit service — Winga',
         'title' => 'Post a service',
+        'edit_title' => 'Edit your service',
         'subtitle' => 'Describe what you offer so clients can request it (e.g. CV writing, design packages).',
+        'edit_subtitle' => 'Update details, packages, or photos. Changes apply as soon as you save.',
         'limit_info' => 'You can list :remaining of :max services on your plan.',
         'at_limit_title' => 'Service limit reached',
         'at_limit_body' => 'Upgrade your subscription to add more services.',
@@ -565,8 +569,12 @@ return [
         'price_hourly' => 'Per hour',
         'price_negotiable' => 'Negotiable',
         'images_label' => 'Photos (max 5, 2MB each)',
+        'existing_images_help' => 'Current photos (tap × to remove). You can add more files below — 5 photos total.',
         'remove_image' => 'Remove',
         'submit' => 'Publish service',
+        'submit_update' => 'Save changes',
+        'updated' => 'Service updated successfully.',
+        'too_many_images' => 'You can have at most 5 photos in total.',
         'migrate_required' => 'Database is missing service_packages. Ask your admin to run: php artisan migrate',
     ],
 
@@ -602,6 +610,11 @@ return [
         'pending_requests' => ':count pending',
         'view_requests' => 'View requests',
         'from_price' => 'From',
+        'edit' => 'Edit',
+        'delete' => 'Delete',
+        'confirm_delete' => 'Delete this service and its packages? Related requests will be removed.',
+        'deleted' => 'Service deleted.',
+        'delete_not_found' => 'Service not found.',
     ],
 
     'huduma_request' => [
@@ -1245,6 +1258,11 @@ return [
         'title' => '🎖️ Winga Premium Plan',
         'subtitle' => 'Upgrade your account to be more visible in job searches, get full analytics and high-value jobs.',
         'current_plan' => 'Current Plan:',
+        'status_active' => 'Active',
+        'your_subscription' => 'Your subscription',
+        'current_plan_card' => 'Your current plan',
+        'renew_or_change' => 'Renew or change below',
+        'subscribed_badge' => 'Winga Bora',
         'expires' => 'Expires',
         'expires_soon' => 'as soon as possible',
         'not_subscribed' => 'Not subscribed yet',
@@ -1394,6 +1412,7 @@ return [
     'upgrade' => [
         'recommended' => 'Recommended',
         'upgrade_plan' => 'Upgrade Plan',
+        'default_benefit' => 'More services, portfolio space, and Winga Bora visibility.',
     ],
 
     // Admin - Financial Control (Malipo)
@@ -1769,6 +1788,14 @@ return [
         'update' => 'Update',
         'create_plan' => 'Create Plan',
         'processing' => 'Processing...',
+        'limits_section' => 'Enforced limits (app)',
+        'limits_hint' => 'Use 0 for unlimited services, daily bids, or portfolio items. Other values cap what Winga can use in the app.',
+        'max_services' => 'Max active services',
+        'daily_bids' => 'Max job applications per day',
+        'portfolio_imgs' => 'Max portfolio items',
+        'search_boost' => 'Search boost (points)',
+        'limit_analytics' => 'Analytics tier',
+        'limit_smart_match' => 'Smart match priority',
     ],
 
     // Admin - Subscriptions

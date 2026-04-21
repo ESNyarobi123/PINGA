@@ -1,15 +1,31 @@
 <div>
     {{-- Header --}}
     <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 mb-8">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">{{ __('messages.subscription.title') }}</h1>
-                <p class="text-zinc-600 dark:text-zinc-400">{{ __('messages.subscription.subtitle') }}</p>
+                <p class="text-zinc-600 dark:text-zinc-400 mt-1">{{ __('messages.subscription.subtitle') }}</p>
             </div>
             @if($activeSub)
-                <div class="rounded-2xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                    <p class="font-semibold">{{ __('messages.subscription.current_plan') }} {{ $activeSub->subscriptionPlan?->name ?? '—' }}</p>
-                    <p class="text-xs">{{ __('messages.subscription.expires') }} {{ $activeSub->expires_at?->format('d M Y') ?? __('messages.subscription.expires_soon') }}</p>
+                <div class="rounded-2xl border-2 {{ $planUi['border_class'] ?? 'border-green-300 dark:border-green-700' }} bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 px-5 py-4 shadow-sm min-w-0 lg:max-w-md w-full">
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800">
+                            <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
+                            {{ __('messages.subscription.status_active') }}
+                        </span>
+                        @if(!empty($planUi['badge']))
+                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold {{ $planUi['badge_class'] ?? 'bg-zinc-100 text-zinc-800' }} ring-1 ring-black/5 dark:ring-white/10">
+                                {{ $planUi['badge'] }}
+                            </span>
+                        @endif
+                    </div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{{ __('messages.subscription.your_subscription') }}</p>
+                    <p class="text-lg font-bold text-zinc-900 dark:text-white mt-0.5">{{ $planUi['name'] ?? $activeSub->subscriptionPlan?->name ?? '—' }}</p>
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2">
+                        {{ __('messages.subscription.expires') }}
+                        <span class="font-semibold text-zinc-800 dark:text-zinc-200">{{ $activeSub->expires_at?->format('d M Y') ?? __('messages.subscription.expires_soon') }}</span>
+                    </p>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-500 mt-2">{{ __('messages.subscription.renew_or_change') }}</p>
                 </div>
             @else
                 <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
@@ -23,8 +39,16 @@
     {{-- Plans Grid --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         @foreach($plans as $plan)
-            <div class="relative rounded-2xl border {{ $plan->is_recommended ? 'border-purple-400 dark:border-purple-500 shadow-xl' : 'border-zinc-200 dark:border-zinc-800 shadow-sm' }} bg-white dark:bg-zinc-900 p-6 flex flex-col gap-4">
-                @if($plan->is_recommended)
+            @php
+                $isCurrentPlan = $activeSub && (
+                    ($activeSub->subscription_plan_id && (int) $activeSub->subscription_plan_id === (int) $plan->id)
+                    || (! $activeSub->subscription_plan_id && $activeSub->plan_slug === $plan->slug)
+                );
+            @endphp
+            <div class="relative rounded-2xl border {{ $isCurrentPlan ? 'border-winga-500 dark:border-winga-500 ring-2 ring-winga-400/50 dark:ring-winga-600/40 shadow-lg' : ($plan->is_recommended ? 'border-purple-400 dark:border-purple-500 shadow-xl' : 'border-zinc-200 dark:border-zinc-800 shadow-sm') }} bg-white dark:bg-zinc-900 p-6 flex flex-col gap-4">
+                @if($isCurrentPlan)
+                    <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-winga-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md whitespace-nowrap">{{ __('messages.subscription.current_plan_card') }}</span>
+                @elseif($plan->is_recommended)
                     <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow">{{ __('messages.subscription.recommended') }}</span>
                 @endif
 
@@ -58,12 +82,19 @@
                     @endforeach
                 </ul>
 
-                <button
-                    class="mt-auto w-full rounded-xl px-4 py-3 text-sm font-semibold transition-colors {{ $selectedPlanId === $plan->id ? 'bg-green-600 text-white' : 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' }}"
-                    wire:click="selectPlan({{ $plan->id }})"
-                >
-                    {{ $selectedPlanId === $plan->id ? __('messages.subscription.selected') : __('messages.subscription.select_plan') }}
-                </button>
+                @if($isCurrentPlan)
+                    <div class="mt-auto w-full rounded-xl px-4 py-3 text-sm font-semibold text-center bg-winga-100 dark:bg-winga-900/40 text-winga-800 dark:text-winga-200 border border-winga-200 dark:border-winga-800">
+                        {{ __('messages.subscription.current_plan_card') }}
+                    </div>
+                @else
+                    <button
+                        type="button"
+                        class="mt-auto w-full rounded-xl px-4 py-3 text-sm font-semibold transition-colors {{ $selectedPlanId === $plan->id ? 'bg-green-600 text-white' : 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' }}"
+                        wire:click="selectPlan({{ $plan->id }})"
+                    >
+                        {{ $selectedPlanId === $plan->id ? __('messages.subscription.selected') : __('messages.subscription.select_plan') }}
+                    </button>
+                @endif
             </div>
         @endforeach
     </div>

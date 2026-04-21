@@ -117,8 +117,10 @@ class SubscriptionService
         return $user->subscriptions()
             ->with('subscriptionPlan')
             ->where('status', 'active')
+            ->whereNotNull('expires_at')
             ->where('expires_at', '>', now())
-            ->latest('starts_at')
+            ->orderByDesc('starts_at')
+            ->orderByDesc('id')
             ->first();
     }
 

@@ -540,8 +540,12 @@ return [
     ],
 
     'post_huduma' => [
+        'page_title' => 'Weka huduma — Winga',
+        'edit_page_title' => 'Hariri huduma — Winga',
         'title' => 'Weka huduma',
+        'edit_title' => 'Hariri huduma yako',
         'subtitle' => 'Eleza unachotoa ili mteja aweze kuomba (mfano uandishi wa CV, mifuko ya design).',
+        'edit_subtitle' => 'Sasisha maelezo, mifuko, au picha. Mabadiliko yanaanza mara uhifadhi.',
         'limit_info' => 'Unaweza kuweka huduma :remaining kati ya :max kwa mpango wako.',
         'at_limit_title' => 'Umefika kikomo',
         'at_limit_body' => 'Panda subscription ili uweke huduma zaidi.',
@@ -569,8 +573,12 @@ return [
         'price_hourly' => 'Kwa saa',
         'price_negotiable' => 'Inajadiliwa',
         'images_label' => 'Picha (hadi 5, MB 2 kila moja)',
+        'existing_images_help' => 'Picha zilizopo (bonyeza × kuondoa). Unaweza kuongeza faili hapa chini — jumla picha 5.',
         'remove_image' => 'Ondoa',
         'submit' => 'Chapisha huduma',
+        'submit_update' => 'Hifadhi mabadiliko',
+        'updated' => 'Huduma imesasishwa.',
+        'too_many_images' => 'Unaweza kuwa na picha 5 tu kwa jumla.',
         'migrate_required' => 'Database haipo na jedwali service_packages. Msimamizi aendeshe: php artisan migrate',
     ],
 
@@ -606,6 +614,11 @@ return [
         'pending_requests' => ':count zinasubiri',
         'view_requests' => 'Ona maombi',
         'from_price' => 'Kuanzia',
+        'edit' => 'Hariri',
+        'delete' => 'Futa',
+        'confirm_delete' => 'Futa huduma hii na mifuko yake? Maombi yanayohusiana yataondolewa.',
+        'deleted' => 'Huduma imefutwa.',
+        'delete_not_found' => 'Huduma haipatikani.',
     ],
 
     'huduma_request' => [
@@ -1247,6 +1260,11 @@ return [
         'title' => '🎖️ Mpango wa Winga Bora',
         'subtitle' => 'Boreshesha akaunti yako ili uonekane zaidi kwenye tafuta kazi, upate analytics kamili na kazi za thamani kubwa.',
         'current_plan' => 'Mpango Uliopo:',
+        'status_active' => 'Inaendelea',
+        'your_subscription' => 'Subscription yako',
+        'current_plan_card' => 'Mpango wako wa sasa',
+        'renew_or_change' => 'Fanya upya au badilisha hapa chini',
+        'subscribed_badge' => 'Winga Bora',
         'expires' => 'Unaisha',
         'expires_soon' => 'haraka iwezekanavyo',
         'not_subscribed' => 'Hujaunganishwa bado',
@@ -1396,6 +1414,7 @@ return [
     'upgrade' => [
         'recommended' => 'Inayopendekezwa',
         'upgrade_plan' => 'Panda Mpango',
+        'default_benefit' => 'Huduma zaidi, nafasi ya portfolio, na uonekano wa Winga Bora.',
     ],
 
     // Admin - Financial Control (Malipo)
@@ -1771,6 +1790,14 @@ return [
         'update' => 'Sasisha',
         'create_plan' => 'Unda Mpango',
         'processing' => 'Inachakata...',
+        'limits_section' => 'Mipaka inayotumika (app)',
+        'limits_hint' => 'Tumia 0 bila kikomo kwa huduma, maombi ya kazi kwa siku, au vitu vya portfolio. Nambari nyingine huweka kikomo kinachotumika kwenye app.',
+        'max_services' => 'Juu ya huduma zinazoonekana',
+        'daily_bids' => 'Juu ya maombi ya kazi kwa siku',
+        'portfolio_imgs' => 'Juu ya vitu vya portfolio',
+        'search_boost' => 'Search boost (pointi)',
+        'limit_analytics' => 'Kiwango cha analytics',
+        'limit_smart_match' => 'Kipaumbele cha smart match',
     ],
 
     // Admin - Subscriptions
