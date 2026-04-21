@@ -240,10 +240,10 @@
                             @if($user->activeSubscription)
                             <div>
                                 <span class="px-2 py-1 text-xs font-bold rounded-lg
-                                    {{ $user->activeSubscription->plan->slug === 'bora' ? 'bg-amber-100 text-amber-700' :
-                                       ($user->activeSubscription->plan->slug === 'kawaida' ? 'bg-sky-100 text-sky-700' :
+                                    {{ $user->activeSubscription->subscriptionPlan?->slug === 'bora' ? 'bg-amber-100 text-amber-700' :
+                                       ($user->activeSubscription->subscriptionPlan?->slug === 'kawaida' ? 'bg-sky-100 text-sky-700' :
                                        'bg-zinc-100 text-zinc-700') }}">
-                                    {{ $user->activeSubscription->plan->name }}
+                                    {{ $user->activeSubscription->subscriptionPlan?->name ?? $user->activeSubscription->planDisplayName() }}
                                 </span>
                                 <p class="text-xs text-zinc-500 mt-1">
                                     {{ $user->activeSubscription->expires_at->diffForHumans() }}
@@ -611,7 +611,7 @@
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <label class="text-sm text-zinc-500">Plan</label>
-                                        <p class="font-medium">{{ $selectedUser->activeSubscription->plan->name }}</p>
+                                        <p class="font-medium">{{ $selectedUser->activeSubscription->subscriptionPlan?->name ?? '—' }}</p>
                                     </div>
                                     <div>
                                         <label class="text-sm text-zinc-500">Expires</label>
@@ -658,7 +658,7 @@
                                     @forelse($selectedUser->subscriptions->take(10) as $sub)
                                     <div class="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
                                         <div class="flex items-center justify-between">
-                                            <span class="font-medium">{{ $sub->plan->name }}</span>
+                                            <span class="font-medium">{{ $sub->subscriptionPlan?->name ?? $sub->planDisplayName() }}</span>
                                             <span class="text-sm {{ $sub->status === 'active' ? 'text-green-600' : 'text-zinc-500' }}">
                                                 {{ $sub->status }}
                                             </span>

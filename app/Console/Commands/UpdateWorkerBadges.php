@@ -21,7 +21,7 @@ class UpdateWorkerBadges extends Command
 
         $query = User::where('role', 'mfanyakazi')
             ->when($workerId, fn ($q) => $q->where('id', $workerId))
-            ->with(['activeSubscription.plan', 'reviewsReceived', 'applications']);
+            ->with(['activeSubscription.subscriptionPlan', 'reviewsReceived', 'applications']);
 
         $workers = $query->get();
 
@@ -70,9 +70,9 @@ class UpdateWorkerBadges extends Command
 
             if (! empty($updates) && ! $dryRun) {
                 $worker->update($updates);
-                $this->info("Updated worker {$worker->id} ({$worker->name}): " . json_encode($updates));
+                $this->info("Updated worker {$worker->id} ({$worker->name}): ".json_encode($updates));
             } elseif (! empty($updates) && $dryRun) {
-                $this->line("[DRY RUN] Would update worker {$worker->id}: " . json_encode($updates));
+                $this->line("[DRY RUN] Would update worker {$worker->id}: ".json_encode($updates));
             }
         }
 

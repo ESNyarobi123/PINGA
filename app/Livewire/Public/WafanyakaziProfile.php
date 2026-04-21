@@ -33,7 +33,7 @@ class WafanyakaziProfile extends Component
             ->where('id', $id)
             ->where('role', 'winga')
             ->where('onboarding_completed', true)
-            ->with(['skills', 'portfolio', 'activeSubscription.plan'])
+            ->with(['skills', 'portfolio', 'activeSubscription.subscriptionPlan'])
             ->withAvg('reviewsReceived', 'rating')
             ->firstOrFail();
 
@@ -92,7 +92,7 @@ class WafanyakaziProfile extends Component
         $user = $this->wafanyakazi;
 
         // Subscription plan badge (all tiers)
-        $plan = $user->activeSubscription?->plan;
+        $plan = $user->activeSubscription?->subscriptionPlan;
         if ($plan) {
             $highlights['plan'] = [
                 'name' => $plan->name,
@@ -118,7 +118,7 @@ class WafanyakaziProfile extends Component
         if ($user->custom_profile_slug) {
             $highlights['custom_url'] = [
                 'slug' => $user->custom_profile_slug,
-                'url' => url('/w/' . $user->custom_profile_slug),
+                'url' => url('/w/'.$user->custom_profile_slug),
             ];
         }
 
@@ -127,7 +127,7 @@ class WafanyakaziProfile extends Component
             $hours = $user->avg_response_hours;
             $label = $hours < 1
                 ? 'Majibu < Dakika 60'
-                : 'Majibu ~Saa ' . round($hours, 1);
+                : 'Majibu ~Saa '.round($hours, 1);
             $highlights['response_time'] = [
                 'label' => $label,
                 'class' => 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
@@ -138,7 +138,7 @@ class WafanyakaziProfile extends Component
         if ($this->limitsService->isTopRatedEligible($user) && $user->is_top_rated) {
             $rating = round($user->reviews_received_avg_rating ?? 0, 1);
             $highlights['top_rated'] = [
-                'label' => 'Top Rated ⭐ ' . $rating,
+                'label' => 'Top Rated ⭐ '.$rating,
                 'class' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
             ];
         }
@@ -150,6 +150,7 @@ class WafanyakaziProfile extends Component
     {
         if (auth()->guest()) {
             $this->showLoginModal = true;
+
             return;
         }
         $this->showLoginModal = false;

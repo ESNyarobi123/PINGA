@@ -31,22 +31,22 @@ class SubscriptionService
             $now = now();
 
             $subscription = Subscription::create([
-                'user_id'              => $user->id,
+                'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
-                'plan'                 => 'basic', // keep old enum valid
-                'plan_slug'            => $plan->slug,
-                'amount_paid'          => $plan->price,
-                'starts_at'            => $now,
-                'expires_at'           => $now->copy()->addDays($plan->duration_days),
-                'status'               => 'active',
-                'payment_status'       => 'completed',
-                'payment_reference'    => $paymentReference,
-                'payment_method'       => $paymentMethod,
+                'plan' => 'basic', // keep old enum valid
+                'plan_slug' => $plan->slug,
+                'amount_paid' => $plan->price,
+                'starts_at' => $now,
+                'expires_at' => $now->copy()->addDays($plan->duration_days),
+                'status' => 'active',
+                'payment_status' => 'completed',
+                'payment_reference' => $paymentReference,
+                'payment_method' => $paymentMethod,
             ]);
 
             $user->notify(new WingaNotification(
                 title: '⭐ Subscription Imewashwa!',
-                message: "Umejiunga na mpango wa {$plan->name}. Sasa unaonekana kwenye orodha ya Winga Bora hadi " . $subscription->expires_at->format('d M Y') . '.',
+                message: "Umejiunga na mpango wa {$plan->name}. Sasa unaonekana kwenye orodha ya Winga Bora hadi ".$subscription->expires_at->format('d M Y').'.',
                 icon: 'star',
                 color: 'green',
                 action_url: route('winga.subscription'),
@@ -69,17 +69,17 @@ class SubscriptionService
         string $paymentReference
     ): Subscription {
         return Subscription::create([
-            'user_id'              => $user->id,
+            'user_id' => $user->id,
             'subscription_plan_id' => $plan->id,
-            'plan'                 => 'basic',
-            'plan_slug'            => $plan->slug,
-            'amount_paid'          => $plan->price,
-            'starts_at'            => null,
-            'expires_at'           => null,
-            'status'               => 'cancelled', // will be set to active by webhook
-            'payment_status'       => 'pending',
-            'payment_reference'    => $paymentReference,
-            'payment_method'       => 'snippe',
+            'plan' => 'basic',
+            'plan_slug' => $plan->slug,
+            'amount_paid' => $plan->price,
+            'starts_at' => null,
+            'expires_at' => null,
+            'status' => 'cancelled', // will be set to active by webhook
+            'payment_status' => 'pending',
+            'payment_reference' => $paymentReference,
+            'payment_method' => 'snippe',
         ]);
     }
 
@@ -89,20 +89,20 @@ class SubscriptionService
     public function payFromWallet(User $user, SubscriptionPlan $plan): Subscription
     {
         return DB::transaction(function () use ($user, $plan) {
-            $reference = 'wallet-sub-' . $user->id . '-' . now()->timestamp;
+            $reference = 'wallet-sub-'.$user->id.'-'.now()->timestamp;
 
             // Deduct from wallet
             $user->decrement('wallet_balance', $plan->price);
 
             // Create debit transaction
             Transaction::create([
-                'user_id'      => $user->id,
-                'type'         => 'debit',
-                'amount'       => $plan->price,
-                'description'  => "Subscription ya Winga - {$plan->name}",
+                'user_id' => $user->id,
+                'type' => 'debit',
+                'amount' => $plan->price,
+                'description' => "Subscription ya Winga - {$plan->name}",
                 'balance_after' => $user->fresh()->wallet_balance,
-                'reference'    => $reference,
-                'status'       => 'completed',
+                'reference' => $reference,
+                'status' => 'completed',
             ]);
 
             return $this->activate($user, $plan, $reference, 'wallet');
@@ -115,7 +115,7 @@ class SubscriptionService
     public function getActivePlan(User $user): ?Subscription
     {
         return $user->subscriptions()
-            ->with('plan')
+            ->with('subscriptionPlan')
             ->where('status', 'active')
             ->where('expires_at', '>', now())
             ->latest('starts_at')

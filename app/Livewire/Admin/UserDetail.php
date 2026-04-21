@@ -8,13 +8,14 @@ use Livewire\Component;
 class UserDetail extends Component
 {
     public User $user;
+
     public string $activeTab = 'overview';
 
     public function mount($id)
     {
         $this->user = User::with([
-            'activeSubscription.plan',
-            'subscriptions.plan',
+            'activeSubscription.subscriptionPlan',
+            'subscriptions.subscriptionPlan',
             'jobs',
             'applications.job',
             'skills',
@@ -70,6 +71,6 @@ class UserDetail extends Component
     {
         return view('livewire.admin.user-detail')
             ->layout('layouts.admin')
-            ->title('User Details - ' . $this->user->name);
+            ->title('User Details - '.$this->user->name);
     }
 }

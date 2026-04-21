@@ -14,34 +14,53 @@ class Subscriptions extends Component
     use WithPagination;
 
     public string $filterStatus = 'all';
-    public string $filterPlan   = '';
-    public string $search       = '';
+
+    public string $filterPlan = '';
+
+    public string $search = '';
 
     // Manual activation form
-    public bool   $showManualForm   = false;
-    public string $manualUserId     = '';
-    public string $manualPlanSlug   = '';
-    public string $manualNotes      = '';
+    public bool $showManualForm = false;
 
-    public function updatingFilterStatus(): void { $this->resetPage(); }
-    public function updatingFilterPlan(): void   { $this->resetPage(); }
-    public function updatingSearch(): void       { $this->resetPage(); }
+    public string $manualUserId = '';
+
+    public string $manualPlanSlug = '';
+
+    public string $manualNotes = '';
+
+    public function updatingFilterStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFilterPlan(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
 
     public function activate(int $subscriptionId): void
     {
-        $sub = Subscription::with('plan')->find($subscriptionId);
-        if (! $sub) { return; }
+        $sub = Subscription::with('subscriptionPlan')->find($subscriptionId);
+        if (! $sub) {
+            return;
+        }
 
-        $plan = $sub->plan;
+        $plan = $sub->subscriptionPlan;
         if (! $plan) {
             $this->dispatch('toast', message: 'Mpango haupatikani.', type: 'error');
+
             return;
         }
 
         app(SubscriptionService::class)->activate(
             $sub->user,
             $plan,
-            'admin-manual-' . $sub->id . '-' . now()->timestamp,
+            'admin-manual-'.$sub->id.'-'.now()->timestamp,
             'admin'
         );
 
@@ -57,7 +76,7 @@ class Subscriptions extends Component
     public function submitManual(): void
     {
         $this->validate([
-            'manualUserId'   => 'required|exists:users,id',
+            'manualUserId' => 'required|exists:users,id',
             'manualPlanSlug' => 'required|exists:subscription_plans,slug',
         ]);
 
@@ -67,7 +86,7 @@ class Subscriptions extends Component
         app(SubscriptionService::class)->activate(
             $user,
             $plan,
-            'admin-grant-' . $user->id . '-' . now()->timestamp,
+            'admin-grant-'.$user->id.'-'.now()->timestamp,
             'admin'
         );
 
@@ -125,7 +144,7 @@ class Subscriptions extends Component
 
     public function render()
     {
-        $query = Subscription::with(['user', 'plan'])->latest();
+        $query = Subscription::with(['user', 'subscriptionPlan'])->latest();
 
         if ($this->filterStatus !== 'all') {
             if ($this->filterStatus === 'active') {
@@ -142,15 +161,15 @@ class Subscriptions extends Component
         if ($this->search !== '') {
             $query->whereHas('user', fn ($q) => $q
                 ->where(function ($sub) {
-                    $sub->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('email', 'like', '%' . $this->search . '%');
+                    $sub->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('email', 'like', '%'.$this->search.'%');
                 })
             );
         }
 
-        $plans       = SubscriptionPlan::active()->get();
-        $stats       = [
-            'total_active'  => Subscription::active()->count(),
+        $plans = SubscriptionPlan::active()->get();
+        $stats = [
+            'total_active' => Subscription::active()->count(),
             'total_expired' => Subscription::where('status', 'expired')->count(),
             'revenue_total' => Subscription::whereIn('status', ['active', 'expired'])
                 ->sum('amount_paid'),
@@ -164,9 +183,9 @@ class Subscriptions extends Component
 
         return view('livewire.admin.subscriptions', [
             'subscriptions' => $query->paginate(20),
-            'plans'         => $plans,
-            'stats'         => $stats,
-            'chartData'     => $chartData,
+            'plans' => $plans,
+            'stats' => $stats,
+            'chartData' => $chartData,
         ])
             ->layout('layouts.admin')
             ->title('Admin — Subscriptions');

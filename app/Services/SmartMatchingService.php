@@ -9,8 +9,7 @@ class SmartMatchingService
 {
     public function __construct(
         protected SubscriptionLimitsService $limitsService
-    ) {
-    }
+    ) {}
 
     /**
      * Score and return best workers for a given job.
@@ -23,7 +22,7 @@ class SmartMatchingService
 
         $workers = User::where('role', 'mfanyakazi')
             ->where('onboarding_completed', true)
-            ->with(['skills', 'reviewsReceived', 'activeSubscription.plan'])
+            ->with(['skills', 'reviewsReceived', 'activeSubscription.subscriptionPlan'])
             ->withAvg('reviewsReceived', 'rating')
             ->withCount(['applications as completed_jobs' => function ($q) {
                 $q->whereHas('job', fn ($j) => $j->where('status', 'completed'));
@@ -98,7 +97,7 @@ class SmartMatchingService
             $boost = $this->limitsService->getSearchBoost($worker);
             $score += $boost;
             if ($boost > 0) {
-                $planName = $worker->activeSubscription?->plan?->name ?? 'Winga Bora';
+                $planName = $worker->activeSubscription?->subscriptionPlan?->name ?? 'Winga Bora';
                 $reasons[] = "⭐ {$planName} (+{$boost})";
             }
 

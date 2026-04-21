@@ -29,8 +29,8 @@ class Subscription extends Model
     protected function casts(): array
     {
         return [
-            'starts_at'   => 'datetime',
-            'expires_at'  => 'datetime',
+            'starts_at' => 'datetime',
+            'expires_at' => 'datetime',
             'amount_paid' => 'decimal:2',
         ];
     }
@@ -40,7 +40,10 @@ class Subscription extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function plan()
+    /**
+     * Related plan row (not the legacy string column `plan` on this model).
+     */
+    public function subscriptionPlan()
     {
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
     }
@@ -64,21 +67,24 @@ class Subscription extends Model
 
     public function planDisplayName(): string
     {
-        return $this->plan()?->first()?->name
-            ?? ucfirst($this->plan_slug ?? $this->plan ?? 'Subscription');
+        $related = $this->subscriptionPlan()->getResults();
+
+        return $related instanceof SubscriptionPlan
+            ? $related->name
+            : self::planLabel((string) ($this->plan_slug ?? $this->attributes['plan'] ?? 'msingi'));
     }
 
-    /** @deprecated Use plan() relationship or plan_slug instead */
+    /** @deprecated Prefer subscriptionPlan() relationship or plan_slug */
     public static function planLabel(string $plan): string
     {
         return match ($plan) {
-            'msingi'  => 'Msingi',
+            'msingi' => 'Msingi',
             'kawaida' => 'Kawaida',
-            'bora'    => 'Bora',
-            'basic'   => 'Msingi',
-            'pro'     => 'Kawaida',
+            'bora' => 'Bora',
+            'basic' => 'Msingi',
+            'pro' => 'Kawaida',
             'premium' => 'Bora',
-            default   => ucfirst($plan),
+            default => ucfirst($plan),
         };
     }
 }

@@ -3,10 +3,9 @@
 namespace App\Livewire\Admin;
 
 use App\Models\Payment;
-use App\Models\WithdrawalRequest;
-use App\Models\Job;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Models\WithdrawalRequest;
 use App\Services\SettingsService;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -16,22 +15,36 @@ class Malipo extends Component
     use WithPagination;
 
     public string $activeTab = 'transactions';
+
     public string $search = '';
+
     public string $filterType = '';
+
     public string $filterStatus = '';
+
     public string $filterMethod = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public string $amountMin = '';
+
     public string $amountMax = '';
 
     // Settings
     public string $commissionRate = '';
+
     public string $minWithdrawal = '';
+
     public string $maxWithdrawalDaily = '';
+
     public string $minDeposit = '';
+
     public string $autoReleaseDays = '';
+
     public string $payoutDelayHours = '';
+
     public array $subscriptionPrices = [
         'msingi' => '',
         'kawaida' => '',
@@ -61,7 +74,7 @@ class Malipo extends Component
         $this->minDeposit = SettingsService::get('payment.min_deposit', '1000');
         $this->autoReleaseDays = SettingsService::get('payment.auto_release_days', '7');
         $this->payoutDelayHours = SettingsService::get('payment.payout_delay_hours', '24');
-        
+
         $this->subscriptionPrices = [
             'msingi' => SettingsService::get('subscription.msingi_price', '15000'),
             'kawaida' => SettingsService::get('subscription.kawaida_price', '45000'),
@@ -77,7 +90,7 @@ class Malipo extends Component
         SettingsService::set('payment.min_deposit', $this->minDeposit);
         SettingsService::set('payment.auto_release_days', $this->autoReleaseDays);
         SettingsService::set('payment.payout_delay_hours', $this->payoutDelayHours);
-        
+
         SettingsService::set('subscription.msingi_price', $this->subscriptionPrices['msingi']);
         SettingsService::set('subscription.kawaida_price', $this->subscriptionPrices['kawaida']);
         SettingsService::set('subscription.bora_price', $this->subscriptionPrices['bora']);
@@ -87,7 +100,7 @@ class Malipo extends Component
                 'commission_rate' => $this->commissionRate,
                 'min_withdrawal' => $this->minWithdrawal,
                 'subscription_prices' => $this->subscriptionPrices,
-            ]
+            ],
         ]);
 
         $this->dispatch('toast', message: 'Payment settings saved', type: 'success');
@@ -97,21 +110,21 @@ class Malipo extends Component
     {
         return Payment::query()
             ->with(['employer', 'worker', 'job'])
-            ->when($this->search, fn($query) => $query
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->where('payment_reference', 'like', '%' . $this->search . '%')
-                        ->orWhereHas('employer', fn($sub) => $sub->where('name', 'like', '%' . $this->search . '%'))
-                        ->orWhereHas('worker', fn($sub) => $sub->where('name', 'like', '%' . $this->search . '%'))
-                        ->orWhereHas('job', fn($sub) => $sub->where('title', 'like', '%' . $this->search . '%'));
+                    $q->where('payment_reference', 'like', '%'.$this->search.'%')
+                        ->orWhereHas('employer', fn ($sub) => $sub->where('name', 'like', '%'.$this->search.'%'))
+                        ->orWhereHas('worker', fn ($sub) => $sub->where('name', 'like', '%'.$this->search.'%'))
+                        ->orWhereHas('job', fn ($sub) => $sub->where('title', 'like', '%'.$this->search.'%'));
                 })
             )
-            ->when($this->filterType, fn($query) => $query->where('status', $this->filterType))
-            ->when($this->filterStatus, fn($query) => $query->where('status', $this->filterStatus))
-            ->when($this->filterMethod, fn($query) => $query->where('payment_method', $this->filterMethod))
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
-            ->when($this->amountMin, fn($query) => $query->where('amount', '>=', $this->amountMin))
-            ->when($this->amountMax, fn($query) => $query->where('amount', '<=', $this->amountMax))
+            ->when($this->filterType, fn ($query) => $query->where('status', $this->filterType))
+            ->when($this->filterStatus, fn ($query) => $query->where('status', $this->filterStatus))
+            ->when($this->filterMethod, fn ($query) => $query->where('payment_method', $this->filterMethod))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->amountMin, fn ($query) => $query->where('amount', '>=', $this->amountMin))
+            ->when($this->amountMax, fn ($query) => $query->where('amount', '<=', $this->amountMax))
             ->latest('created_at');
     }
 
@@ -120,8 +133,8 @@ class Malipo extends Component
         return Payment::query()
             ->where('status', 'escrowed')
             ->with(['employer', 'worker', 'job.employer', 'job.hiredWorker'])
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->latest('created_at');
     }
 
@@ -129,23 +142,23 @@ class Malipo extends Component
     {
         return WithdrawalRequest::query()
             ->with(['user'])
-            ->when($this->search, fn($query) => $query
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->where('reference', 'like', '%' . $this->search . '%')
-                        ->orWhereHas('user', fn($sub) => $sub->where('name', 'like', '%' . $this->search . '%'));
+                    $q->where('reference', 'like', '%'.$this->search.'%')
+                        ->orWhereHas('user', fn ($sub) => $sub->where('name', 'like', '%'.$this->search.'%'));
                 })
             )
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->latest('created_at');
     }
 
     private function getSubscriptionsQuery()
     {
         return Subscription::query()
-            ->with(['user', 'plan'])
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->with(['user', 'subscriptionPlan'])
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->latest('created_at');
     }
 
@@ -228,9 +241,10 @@ class Malipo extends Component
     public function releaseEscrow(int $paymentId): void
     {
         $payment = Payment::findOrFail($paymentId);
-        
+
         if ($payment->status !== 'escrowed') {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
+
             return;
         }
 
@@ -250,9 +264,10 @@ class Malipo extends Component
     public function refundEscrow(int $paymentId): void
     {
         $payment = Payment::findOrFail($paymentId);
-        
+
         if ($payment->status !== 'escrowed') {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
+
             return;
         }
 
@@ -269,7 +284,7 @@ class Malipo extends Component
     public function retryWithdrawal(int $withdrawalId): void
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
-        
+
         $withdrawal->update(['status' => 'pending']);
 
         $this->logAdminAction('retry_withdrawal', $withdrawal, [
@@ -282,7 +297,7 @@ class Malipo extends Component
     public function cancelWithdrawal(int $withdrawalId): void
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
-        
+
         $withdrawal->update(['status' => 'rejected']);
 
         // Refund amount to user's wallet
@@ -300,7 +315,7 @@ class Malipo extends Component
     public function markWithdrawalPaid(int $withdrawalId): void
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
-        
+
         $withdrawal->update(['status' => 'paid']);
 
         $this->logAdminAction('mark_withdrawal_paid', $withdrawal, [
@@ -313,9 +328,9 @@ class Malipo extends Component
     public function exportTransactions(): void
     {
         $transactions = $this->getTransactionsQuery()->get();
-        
+
         $csv = "Ref ID,Status,User,Amount,Platform Fee,Payment Method,Date\n";
-        
+
         foreach ($transactions as $transaction) {
             $csv .= sprintf(
                 "%s,%s,%s,%s,%s,%s,%s\n",
@@ -363,7 +378,7 @@ class Malipo extends Component
                 'totalRefunds' => $this->totalRefunds,
                 'failedWithdrawalsCount' => $this->failedWithdrawalsCount,
                 'failedWithdrawalsAmount' => $this->failedWithdrawalsAmount,
-            ]
+            ],
         ])
             ->layout('layouts.admin')
             ->title('Financial Control Center');

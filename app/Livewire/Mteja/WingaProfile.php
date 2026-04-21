@@ -45,7 +45,7 @@ class WingaProfile extends Component
                 'skills',
                 'portfolios',
                 'reviewsReceived.reviewer',
-                'activeSubscription.plan',
+                'activeSubscription.subscriptionPlan',
                 'services' => fn ($q) => $q->where('status', 'active')->with($servicesWith)->orderBy('title'),
             ])
             ->withAvg('reviewsReceived', 'rating')
@@ -187,7 +187,7 @@ class WingaProfile extends Component
         $highlights = [];
         $user = $this->winga;
 
-        $plan = $user->activeSubscription?->plan;
+        $plan = $user->activeSubscription?->subscriptionPlan;
         if ($plan) {
             $highlights['plan'] = [
                 'name' => $plan->name,

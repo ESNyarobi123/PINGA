@@ -8,7 +8,7 @@
             </div>
             @if($activeSub)
                 <div class="rounded-2xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                    <p class="font-semibold">{{ __('messages.subscription.current_plan') }} {{ $activeSub->plan->name ?? '—' }}</p>
+                    <p class="font-semibold">{{ __('messages.subscription.current_plan') }} {{ $activeSub->subscriptionPlan?->name ?? '—' }}</p>
                     <p class="text-xs">{{ __('messages.subscription.expires') }} {{ $activeSub->expires_at?->format('d M Y') ?? __('messages.subscription.expires_soon') }}</p>
                 </div>
             @else

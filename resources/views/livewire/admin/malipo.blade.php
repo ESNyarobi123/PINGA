@@ -493,10 +493,10 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-1 text-xs font-bold rounded-lg
-                                        {{ $subscription->plan->slug === 'bora' ? 'bg-amber-100 text-amber-700' :
-                                           ($subscription->plan->slug === 'kawaida' ? 'bg-sky-100 text-sky-700' :
+                                        {{ $subscription->subscriptionPlan?->slug === 'bora' ? 'bg-amber-100 text-amber-700' :
+                                           ($subscription->subscriptionPlan?->slug === 'kawaida' ? 'bg-sky-100 text-sky-700' :
                                            'bg-zinc-100 text-zinc-700') }}">
-                                        {{ $subscription->plan->name }}
+                                        {{ $subscription->subscriptionPlan?->name ?? $subscription->planDisplayName() }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-white">
@@ -534,19 +534,19 @@
                         <div>
                             <p class="text-sm text-zinc-500">Msingi</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('plan', fn($q) => $q->where('slug', 'msingi'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'msingi'))->whereMonth('created_at', now()->month)->sum('amount')) }}
                             </p>
                         </div>
                         <div>
                             <p class="text-sm text-zinc-500">Kawaida</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('plan', fn($q) => $q->where('slug', 'kawaida'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'kawaida'))->whereMonth('created_at', now()->month)->sum('amount')) }}
                             </p>
                         </div>
                         <div>
                             <p class="text-sm text-zinc-500">Bora</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('plan', fn($q) => $q->where('slug', 'bora'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'bora'))->whereMonth('created_at', now()->month)->sum('amount')) }}
                             </p>
                         </div>
                     </div>

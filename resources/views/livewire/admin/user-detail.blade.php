@@ -264,7 +264,7 @@
             <dl class="space-y-3">
                 <div>
                     <dt class="text-sm text-zinc-500 dark:text-zinc-400">Plan</dt>
-                    <dd class="text-sm font-medium text-zinc-900 dark:text-white">{{ $user->activeSubscription->plan->name ?? 'N/A' }}</dd>
+                    <dd class="text-sm font-medium text-zinc-900 dark:text-white">{{ $user->activeSubscription->subscriptionPlan?->name ?? $user->activeSubscription->planDisplayName() }}</dd>
                 </div>
                 <div>
                     <dt class="text-sm text-zinc-500 dark:text-zinc-400">Status</dt>
@@ -290,7 +290,7 @@
                 @foreach($user->subscriptions->take(5) as $subscription)
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-zinc-900 dark:text-white">{{ $subscription->plan->name ?? 'N/A' }}</p>
+                        <p class="text-sm font-medium text-zinc-900 dark:text-white">{{ $subscription->subscriptionPlan?->name ?? $subscription->planDisplayName() }}</p>
                         <p class="text-xs text-zinc-500">{{ $subscription->created_at->format('d M Y') }}</p>
                     </div>
                     <flux:badge size="sm" color="{{ $subscription->status === 'active' ? 'green' : 'zinc' }}">

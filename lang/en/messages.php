@@ -260,9 +260,9 @@ return [
     'home' => [
         // Hero
         'badge' => '#1 Job Platform in Tanzania',
-        'hero_title_1' => 'Quick Jobs',
-        'hero_title_2' => 'for Everyone',
-        'hero_desc' => 'Winga connects you with the right talent — anytime, anywhere. Post a job, review applications, and pay securely — all from your phone, in one seamless experience. Simple, safe, and built for everyone.',
+        'hero_title_1' => 'Get Your Job',
+        'hero_title_2' => 'Done Today',
+        'hero_desc' => 'Post a job, receive applications, and hire all in minutes. Simple, fast, and Secured.',
         'cta_start' => 'Start Now — Free',
         'cta_find_jobs' => 'Find Jobs',
         'stat_workers' => 'Workers',

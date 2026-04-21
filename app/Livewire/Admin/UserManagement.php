@@ -2,14 +2,9 @@
 
 namespace App\Livewire\Admin;
 
-use App\Models\User;
-use App\Models\Subscription;
-use App\Models\Job;
-use App\Models\Application;
-use App\Models\Review;
-use App\Models\Payment;
-use App\Models\Dispute;
 use App\Models\AdminAuditLog;
+use App\Models\Subscription;
+use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -19,41 +14,57 @@ class UserManagement extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $filterRole = '';
+
     public string $filterStatus = '';
+
     public string $filterSubscription = '';
+
     public string $filterLocation = '';
+
     public string $filterVerification = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
 
     public array $selectedUsers = [];
+
     public bool $selectAll = false;
 
     // Sorting
     public string $sortField = 'created_at';
+
     public string $sortDirection = 'desc';
 
     // Bulk actions
     public string $bulkAction = '';
+
     public string $bulkMessage = '';
 
     // User profile modal
     public bool $showProfileModal = false;
+
     public ?User $selectedUser = null;
+
     public string $profileTab = 'overview';
 
     // Wallet actions
     public string $walletAction = '';
+
     public int $walletAmount = 0;
+
     public string $walletReason = '';
 
     // Subscription actions
     public string $subscriptionPlan = '';
+
     public int $subscriptionDays = 30;
 
     // Verification actions
     public string $verificationType = '';
+
     public string $verificationStatus = '';
 
     protected $queryString = [
@@ -100,34 +111,34 @@ class UserManagement extends Component
     private function getUsersQuery()
     {
         return User::query()
-            ->with(['activeSubscription.plan'])
-            ->when($this->search, fn($query) => $query
+            ->with(['activeSubscription.subscriptionPlan'])
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('email', 'like', '%' . $this->search . '%')
-                        ->orWhere('phone', 'like', '%' . $this->search . '%');
+                    $q->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('email', 'like', '%'.$this->search.'%')
+                        ->orWhere('phone', 'like', '%'.$this->search.'%');
                 })
             )
-            ->when($this->filterRole, fn($query) => $query->where('role', $this->filterRole))
-            ->when($this->filterStatus, fn($query) => match ($this->filterStatus) {
+            ->when($this->filterRole, fn ($query) => $query->where('role', $this->filterRole))
+            ->when($this->filterStatus, fn ($query) => match ($this->filterStatus) {
                 'active' => $query->whereNull('suspended_at'),
                 'suspended' => $query->whereNotNull('suspended_at'),
                 default => $query,
             })
-            ->when($this->filterSubscription, fn($query) => match ($this->filterSubscription) {
+            ->when($this->filterSubscription, fn ($query) => match ($this->filterSubscription) {
                 'active' => $query->whereHas('activeSubscription'),
-                'expired' => $query->whereHas('subscriptions', fn($q) => $q->where('status', 'expired')),
+                'expired' => $query->whereHas('subscriptions', fn ($q) => $q->where('status', 'expired')),
                 'none' => $query->whereDoesntHave('subscriptions'),
                 default => $query,
             })
-            ->when($this->filterVerification, fn($query) => match ($this->filterVerification) {
+            ->when($this->filterVerification, fn ($query) => match ($this->filterVerification) {
                 'verified' => $query->where('is_verified', true),
                 'unverified' => $query->where('is_verified', false),
                 default => $query,
             })
-            ->when($this->filterLocation, fn($query) => $query->where('mkoa', $this->filterLocation))
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->filterLocation, fn ($query) => $query->where('mkoa', $this->filterLocation))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->orderBy($this->sortField, $this->sortDirection);
     }
 
@@ -153,17 +164,17 @@ class UserManagement extends Component
 
     public function getPremiumUsersProperty(): int
     {
-        return User::whereHas('activeSubscription', fn($q) => $q->whereHas('plan', fn($p) => $p->where('slug', '!=', 'msingi')))->count();
+        return User::whereHas('activeSubscription', fn ($q) => $q->whereHas('subscriptionPlan', fn ($p) => $p->where('slug', '!=', 'msingi')))->count();
     }
 
     public function openProfile($userId): void
     {
-        \Log::info('openProfile called with userId: ' . $userId);
-        
+        \Log::info('openProfile called with userId: '.$userId);
+
         $user = User::findOrFail($userId);
         $this->selectedUser = $user->load([
-            'activeSubscription.plan',
-            'subscriptions.plan',
+            'activeSubscription.subscriptionPlan',
+            'subscriptions.subscriptionPlan',
             'jobs',
             'applications.job',
             'reviewsGiven',
@@ -173,7 +184,7 @@ class UserManagement extends Component
         ]);
         $this->showProfileModal = true;
         $this->profileTab = 'overview';
-        
+
         $this->dispatch('toast', message: 'Profile loaded', type: 'success');
     }
 
@@ -196,10 +207,10 @@ class UserManagement extends Component
         $count = 0;
 
         match ($this->bulkAction) {
-            'activate' => $users->each(fn($user) => $this->activateUser($user)),
-            'suspend' => $users->each(fn($user) => $this->suspendUser($user)),
-            'ban' => $users->each(fn($user) => $this->banUser($user)),
-            'delete' => $users->each(fn($user) => $this->deleteUser($user)),
+            'activate' => $users->each(fn ($user) => $this->activateUser($user)),
+            'suspend' => $users->each(fn ($user) => $this->suspendUser($user)),
+            'ban' => $users->each(fn ($user) => $this->banUser($user)),
+            'delete' => $users->each(fn ($user) => $this->deleteUser($user)),
             'export' => $this->exportUsers($users),
             'send_message' => $this->sendBulkMessage($users),
             'grant_subscription' => $this->grantBulkSubscription($users),
@@ -242,7 +253,7 @@ class UserManagement extends Component
     private function exportUsers($users): void
     {
         $csv = "ID,Name,Email,Phone,Role,Status,Wallet Balance,Subscription,Verification,Registered,Last Login\n";
-        
+
         foreach ($users as $user) {
             $csv .= sprintf(
                 "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
@@ -281,10 +292,10 @@ class UserManagement extends Component
         $user = User::findOrFail($userId);
         session(['impersonate_admin_id' => auth()->id()]);
         auth()->login($user);
-        
+
         $this->logAdminAction('impersonate_user', $user);
         $this->dispatch('toast', message: "Now impersonating {$user->name}", type: 'info');
-        
+
         $this->redirect(route($user->role === 'winga' ? 'winga.dashboard' : 'mteja.dashboard'));
     }
 
@@ -297,7 +308,7 @@ class UserManagement extends Component
             'ban' => $this->banUser($user),
         };
 
-        $this->dispatch('toast', message: "User status updated", type: 'success');
+        $this->dispatch('toast', message: 'User status updated', type: 'success');
     }
 
     public function executeWalletAction(): void
@@ -317,7 +328,8 @@ class UserManagement extends Component
             $this->dispatch('toast', message: "Wallet credited with TZS {$this->walletAmount}", type: 'success');
         } else {
             if ($this->selectedUser->wallet_balance < $this->walletAmount) {
-                $this->dispatch('toast', message: "Insufficient wallet balance", type: 'error');
+                $this->dispatch('toast', message: 'Insufficient wallet balance', type: 'error');
+
                 return;
             }
 
@@ -341,11 +353,11 @@ class UserManagement extends Component
         ]);
 
         $plan = \App\Models\SubscriptionPlan::where('slug', $this->subscriptionPlan)->firstOrFail();
-        
+
         app(\App\Services\SubscriptionService::class)->activate(
             $this->selectedUser,
             $plan,
-            'admin-grant-' . $this->selectedUser->id . '-' . now()->timestamp,
+            'admin-grant-'.$this->selectedUser->id.'-'.now()->timestamp,
             'admin'
         );
 
@@ -354,7 +366,7 @@ class UserManagement extends Component
             'days' => $this->subscriptionDays,
         ]);
 
-        $this->dispatch('toast', message: "Subscription granted", type: 'success');
+        $this->dispatch('toast', message: 'Subscription granted', type: 'success');
         $this->reset(['subscriptionPlan', 'subscriptionDays']);
         $this->selectedUser->refresh();
     }
@@ -364,11 +376,11 @@ class UserManagement extends Component
         if ($status === 'approve') {
             $this->selectedUser->update(['is_verified' => true]);
             $this->logAdminAction('approve_verification', $this->selectedUser);
-            $this->dispatch('toast', message: "User verified successfully", type: 'success');
+            $this->dispatch('toast', message: 'User verified successfully', type: 'success');
         } else {
             $this->selectedUser->update(['is_verified' => false]);
             $this->logAdminAction('reject_verification', $this->selectedUser);
-            $this->dispatch('toast', message: "Verification rejected", type: 'success');
+            $this->dispatch('toast', message: 'Verification rejected', type: 'success');
         }
 
         $this->selectedUser->refresh();
@@ -389,7 +401,7 @@ class UserManagement extends Component
         $user = User::findOrFail($userId);
         $user->update(['email_verified_at' => now()]);
         $this->logAdminAction('force_email_verify', $user);
-        $this->dispatch('toast', message: "Email verified", type: 'success');
+        $this->dispatch('toast', message: 'Email verified', type: 'success');
     }
 
     public function changeUserRole($userId, string $newRole): void
@@ -397,13 +409,13 @@ class UserManagement extends Component
         $user = User::findOrFail($userId);
         $oldRole = $user->role;
         $user->update(['role' => $newRole]);
-        
+
         $this->logAdminAction('change_role', $user, [
             'old' => ['role' => $oldRole],
             'new' => ['role' => $newRole],
         ]);
         $this->dispatch('toast', message: "User role changed from {$oldRole} to {$newRole}", type: 'success');
-        
+
         if ($this->selectedUser && $this->selectedUser->id === $userId) {
             $this->selectedUser->refresh();
         }
@@ -417,9 +429,9 @@ class UserManagement extends Component
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ]);
-        
+
         $this->logAdminAction('reset_2fa', $user);
-        $this->dispatch('toast', message: "2FA/OTP reset successfully", type: 'success');
+        $this->dispatch('toast', message: '2FA/OTP reset successfully', type: 'success');
     }
 
     public function getUserStats(User $user): array

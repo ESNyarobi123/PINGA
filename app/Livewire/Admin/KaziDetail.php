@@ -46,7 +46,7 @@ class KaziDetail extends Component
             'employer',
             'category',
             'applications.worker',
-            'applications.worker.activeSubscription.plan',
+            'applications.worker.activeSubscription.subscriptionPlan',
             'hiredWorker',
             'payment',
         ])->findOrFail($id);

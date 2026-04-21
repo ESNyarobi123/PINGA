@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Job;
 use App\Models\User;
+use App\Notifications\SmartMatchNotification;
 use App\Services\SmartMatchingService;
 use App\Services\SubscriptionLimitsService;
 use Illuminate\Bus\Queueable;
@@ -12,7 +13,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Notification;
-use App\Notifications\SmartMatchNotification;
 
 class SendSmartMatchNotifications implements ShouldQueue
 {
@@ -25,8 +25,7 @@ class SendSmartMatchNotifications implements ShouldQueue
     public function __construct(
         public Job $job,
         public array $workerIds = []
-    ) {
-    }
+    ) {}
 
     public function handle(SmartMatchingService $matchingService, SubscriptionLimitsService $limitsService): void
     {
@@ -38,7 +37,7 @@ class SendSmartMatchNotifications implements ShouldQueue
             $workers = collect($matches)->pluck('user')->all();
         } else {
             $workers = User::whereIn('id', $this->workerIds)
-                ->with('activeSubscription.plan')
+                ->with('activeSubscription.subscriptionPlan')
                 ->get();
         }
 
@@ -50,7 +49,7 @@ class SendSmartMatchNotifications implements ShouldQueue
         ];
 
         foreach ($workers as $worker) {
-            $planSlug = $worker->activeSubscription?->plan?->slug ?? 'msingi';
+            $planSlug = $worker->activeSubscription?->subscriptionPlan?->slug ?? 'msingi';
 
             match ($planSlug) {
                 'bora' => $priorityGroups['immediate'][] = $worker,

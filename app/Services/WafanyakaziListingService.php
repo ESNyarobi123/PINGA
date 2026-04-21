@@ -16,7 +16,7 @@ class WafanyakaziListingService
         $query = User::query()
             ->where('role', 'winga')
             ->where('onboarding_completed', true)
-            ->with(['skills', 'portfolio', 'activeSubscription.plan'])
+            ->with(['skills', 'portfolio', 'activeSubscription.subscriptionPlan'])
             ->withAvg('reviewsReceived', 'rating');
 
         if (! empty($params['search'])) {

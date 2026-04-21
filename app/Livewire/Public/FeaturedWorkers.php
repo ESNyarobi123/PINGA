@@ -35,10 +35,10 @@ class FeaturedWorkers extends Component
         $query = User::query()
             ->where('role', 'mfanyakazi')
             ->where('onboarding_completed', true)
-            ->whereHas('activeSubscription.plan', function ($q) {
+            ->whereHas('activeSubscription.subscriptionPlan', function ($q) {
                 $q->where('slug', 'bora');
             })
-            ->with(['skills', 'activeSubscription.plan'])
+            ->with(['skills', 'activeSubscription.subscriptionPlan'])
             ->withAvg('reviewsReceived', 'rating')
             ->orderByDesc('reviews_received_avg_rating')
             ->orderByDesc('created_at');

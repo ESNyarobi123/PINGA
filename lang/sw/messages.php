@@ -260,9 +260,9 @@ return [
     'home' => [
         // Hero
         'badge' => 'Jukwaa #1 la Ajira Tanzania',
-        'hero_title_1' => 'Kazi za Haraka',
-        'hero_title_2' => 'kwa Kila Mtu',
-        'hero_desc' => 'Winga inakuunganisha na wafanyakazi bora au kazi bora katika sekunde chache. Tuma kazi, pata maombi, na lipa kwa usalama — yote kwa simu yako.',
+        'hero_title_1' => 'Pata Kazi Yako',
+        'hero_title_2' => 'Ikamilike Leo',
+        'hero_desc' => 'Chapisha kazi, pokea maombi, na uajiri ndani ya dakika. Rahisi, haraka, na salama.',
         'cta_start' => 'Anza Sasa — Bure',
         'cta_find_jobs' => 'Tafuta Kazi',
         'stat_workers' => 'Wafanyakazi',

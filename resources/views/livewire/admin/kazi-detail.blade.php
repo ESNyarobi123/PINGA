@@ -221,7 +221,7 @@
                                             <p class="font-medium text-zinc-900 dark:text-white">{{ $application->user?->name ?? 'Unknown' }}</p>
                                             @if($application->user?->activeSubscription)
                                             <span class="text-xs px-1 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
-                                                {{ $application->user->activeSubscription->plan?->name ?? 'Unknown Plan' }}
+                                                {{ $application->user->activeSubscription->subscriptionPlan?->name ?? 'Unknown Plan' }}
                                             </span>
                                             @endif
                                         </div>
@@ -463,7 +463,7 @@
                         </div>
                         @if($job->hiredWorker?->activeSubscription)
                         <span class="text-xs px-1 py-0.5 bg-indigo-100 text-indigo-700 rounded">
-                            {{ $job->hiredWorker->activeSubscription->plan?->name ?? 'Unknown Plan' }}
+                            {{ $job->hiredWorker->activeSubscription->subscriptionPlan?->name ?? 'Unknown Plan' }}
                         </span>
                         @endif
                     </div>

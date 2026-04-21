@@ -161,7 +161,7 @@
                             {{ $sub->plan_slug === 'bora' ? 'bg-winga-100 dark:bg-winga-900/30 text-winga-700 dark:text-winga-400' :
                                ($sub->plan_slug === 'kawaida' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
                                 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400') }}">
-                            {{ $sub->plan?->name ?? ucfirst($sub->plan_slug ?? $sub->plan) }}
+                            {{ $sub->subscriptionPlan?->name ?? ucfirst($sub->plan_slug ?? $sub->plan) }}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-zinc-700 dark:text-zinc-300 font-medium">TZS {{ number_format($sub->amount_paid) }}</td>
