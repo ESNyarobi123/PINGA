@@ -72,7 +72,7 @@ class WafanyakaziListingService
         return $users->map(function (User $user) {
             $portfolioFirst = $user->portfolio->first();
             $bio = $user->bio ?? 'Mfanyakazi mwenye ujuzi. Tafadhali wasiliana kwa maelezo zaidi.';
-            $plan = $user->activeSubscription?->plan;
+            $plan = $user->activeSubscription?->subscriptionPlan;
 
             return [
                 'id' => $user->id,
@@ -90,7 +90,7 @@ class WafanyakaziListingService
                 'subscription' => $plan ? [
                     'name' => $plan->name,
                     'slug' => $plan->slug,
-                    'is_premium' => in_array($plan->slug, ['kawaida', 'bora']),
+                    'is_premium' => $this->isPremiumPlanSlug($plan->slug),
                     'border_class' => $this->getPlanBorderClass($plan->slug),
                     'badge_class' => $this->getPlanBadgeClass($plan->slug),
                 ] : null,
@@ -98,11 +98,19 @@ class WafanyakaziListingService
         })->all();
     }
 
+    private function isPremiumPlanSlug(string $slug): bool
+    {
+        return in_array($slug, [
+            'kawaida', 'bora', 'pro', 'premium',
+            'winga-karume', 'winga-kkoo',
+        ], true);
+    }
+
     private function getPlanBorderClass(string $slug): string
     {
         return match ($slug) {
-            'bora' => 'ring-2 ring-amber-400 dark:ring-amber-500',
-            'kawaida' => 'ring-2 ring-sky-400 dark:ring-sky-500',
+            'bora', 'premium', 'winga-kkoo' => 'ring-2 ring-amber-400 dark:ring-amber-500',
+            'kawaida', 'pro', 'winga-karume' => 'ring-2 ring-sky-400 dark:ring-sky-500',
             default => '',
         };
     }
@@ -110,8 +118,8 @@ class WafanyakaziListingService
     private function getPlanBadgeClass(string $slug): string
     {
         return match ($slug) {
-            'bora' => 'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
-            'kawaida' => 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white',
+            'bora', 'premium', 'winga-kkoo' => 'bg-gradient-to-r from-amber-500 to-orange-500 text-white',
+            'kawaida', 'pro', 'winga-karume' => 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white',
             default => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
         };
     }

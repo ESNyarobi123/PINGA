@@ -264,7 +264,7 @@ class UserManagement extends Component
                 $user->role,
                 $user->suspended_at ? 'Suspended' : 'Active',
                 $user->wallet_balance ?? 0,
-                $user->activeSubscription?->plan->name ?? 'None',
+                $user->activeSubscription?->subscriptionPlan?->name ?? 'None',
                 $user->is_verified ? 'Verified' : 'Unverified',
                 $user->created_at->format('Y-m-d H:i'),
                 ''
