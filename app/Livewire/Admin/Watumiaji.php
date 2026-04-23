@@ -12,7 +12,9 @@ class Watumiaji extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $roleFilter = 'all'; // all, winga, mteja
+
     public string $statusFilter = ''; // new, unverified, high_rated, complains
 
     // Bulk actions
@@ -22,16 +24,25 @@ class Watumiaji extends Component
 
     // Add User Modal
     public bool $showAddUserModal = false;
+
     public string $newUserName = '';
+
     public string $newUserEmail = '';
+
     public string $newUserPhone = '';
+
     public string $newUserRole = 'winga';
+
     public string $newUserPassword = '';
 
-    public function updatedSelectAll($value)
+    public function updatedSelectAll(mixed $value): void
     {
         if ($value) {
-            $this->selectedUsers = User::pluck('id')->map(fn ($id) => (string) $id)->toArray();
+            $this->selectedUsers = User::query()
+                ->where('role', '!=', 'admin')
+                ->pluck('id')
+                ->map(fn ($id) => (string) $id)
+                ->all();
         } else {
             $this->selectedUsers = [];
         }
@@ -105,7 +116,7 @@ class Watumiaji extends Component
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ]);
-        
+
         Log::info("Admin reset 2FA for user ID: {$userId}");
         $this->dispatch('toast', message: 'OTP 2FA imewekwa upya kwa mtumiaji.', type: 'success');
     }
@@ -114,7 +125,7 @@ class Watumiaji extends Component
     {
         $user = User::findOrFail($userId);
         $user->update(['two_factor_enabled' => true]);
-        
+
         Log::info("Admin enabled 2FA for user ID: {$userId}");
         $this->dispatch('toast', message: '2FA/OTP imewezeshwa.', type: 'success');
     }
@@ -128,7 +139,7 @@ class Watumiaji extends Component
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ]);
-        
+
         Log::info("Admin disabled 2FA for user ID: {$userId}");
         $this->dispatch('toast', message: '2FA/OTP imezimwa.', type: 'warning');
     }
@@ -136,7 +147,7 @@ class Watumiaji extends Component
     public function openProfile($userId): void
     {
         Log::info("Admin viewing profile for user ID: {$userId}");
-        
+
         // Redirect to admin user detail page
         $this->redirect(route('admin.watumiaji.detail', $userId), navigate: true);
     }
@@ -146,7 +157,7 @@ class Watumiaji extends Component
         $user = User::findOrFail($userId);
         $oldRole = $user->role;
         $user->update(['role' => $newRole]);
-        
+
         Log::info("Admin changed role for user ID: {$userId}", ['old' => $oldRole, 'new' => $newRole]);
         $this->dispatch('toast', message: "Jukumu limebadilishwa kutoka {$oldRole} kwenda {$newRole}.", type: 'success');
     }
@@ -184,9 +195,77 @@ class Watumiaji extends Component
         ]);
 
         Log::info("Admin created new user ID: {$user->id}");
-        $this->dispatch('toast', message: "Mtumiaji mpya ameongezwa kikamilifu!", type: 'success');
-        
+        $this->dispatch('toast', message: 'Mtumiaji mpya ameongezwa kikamilifu!', type: 'success');
+
         $this->closeAddUserModal();
+    }
+
+    public function bulkVerifyUsers(): void
+    {
+        $ids = $this->normalizedSelectedUserIds();
+        if ($ids === []) {
+            $this->dispatch('toast', message: 'Hakuna watumiaji waliochaguliwa.', type: 'info');
+
+            return;
+        }
+
+        $count = 0;
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if ($user === null || $user->isAdmin()) {
+                continue;
+            }
+            $user->update(['is_verified' => true]);
+            $count++;
+        }
+
+        Log::info('Admin bulk verified users', ['count' => $count, 'ids' => $ids]);
+        $this->clearBulkSelection();
+        $this->dispatch('toast', message: "Watumiaji {$count} wamethibitishwa (NIDA/VETA).", type: 'success');
+    }
+
+    public function bulkSuspendUsers(): void
+    {
+        $ids = $this->normalizedSelectedUserIds();
+        if ($ids === []) {
+            $this->dispatch('toast', message: 'Hakuna watumiaji waliochaguliwa.', type: 'info');
+
+            return;
+        }
+
+        $count = 0;
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if ($user === null || $user->isAdmin()) {
+                continue;
+            }
+            if ($user->suspended_at) {
+                continue;
+            }
+            $user->update([
+                'suspended_at' => now(),
+                'suspended_reason' => 'Imesitishwa na msimamizi (bulk)',
+            ]);
+            $count++;
+        }
+
+        Log::info('Admin bulk suspended users', ['count' => $count, 'ids' => $ids]);
+        $this->clearBulkSelection();
+        $this->dispatch('toast', message: "Akaunti {$count} zimesitishwa.", type: 'warning');
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function normalizedSelectedUserIds(): array
+    {
+        return array_values(array_unique(array_map('intval', $this->selectedUsers)));
+    }
+
+    private function clearBulkSelection(): void
+    {
+        $this->selectedUsers = [];
+        $this->selectAll = false;
     }
 
     public function render()
@@ -204,21 +283,21 @@ class Watumiaji extends Component
             ->when($this->statusFilter !== '', fn ($q) => match ($this->statusFilter) {
                 'new' => $q->where('created_at', '>=', now()->subDays(7)),
                 'unverified' => $q->where('onboarding_completed', false),
-                'high_rated' => $q->whereHas('applications', fn($q) => $q->where('status', 'hired')),
+                'high_rated' => $q->whereHas('applications', fn ($q) => $q->where('status', 'hired')),
                 'complaints' => $q->whereHas('disputes'),
                 default => $q,
             })
             ->orderByDesc('created_at');
 
-        $wingaCount   = User::where('role', 'winga')->count();
-        $mtejCount    = User::where('role', 'mteja')->count();
+        $wingaCount = User::where('role', 'winga')->count();
+        $mtejCount = User::where('role', 'mteja')->count();
 
         $users = $query->latest()->paginate(15);
 
         return view('livewire.admin.watumiaji', [
-            'users'       => $users,
-            'wingaCount'  => $wingaCount,
-            'mtejCount'   => $mtejCount,
+            'users' => $users,
+            'wingaCount' => $wingaCount,
+            'mtejCount' => $mtejCount,
         ])->layout('layouts.admin')->title('Watumiaji | Usimamizi');
     }
 }

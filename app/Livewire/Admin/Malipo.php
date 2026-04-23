@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\SettingsService;
+use Illuminate\Support\Facades\Http;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -59,11 +60,27 @@ class Malipo extends Component
         'filterMethod' => ['except' => ''],
     ];
 
+    private const TABS = ['transactions', 'escrow', 'withdrawals', 'subscriptions', 'settings'];
+
     public function mount(): void
     {
         $this->dateFrom = now()->subDays(30)->format('Y-m-d');
         $this->dateTo = now()->format('Y-m-d');
         $this->loadSettings();
+
+        if (! in_array($this->activeTab, self::TABS, true)) {
+            $this->activeTab = 'transactions';
+        }
+    }
+
+    public function setActiveTab(string $tab): void
+    {
+        if (! in_array($tab, self::TABS, true)) {
+            return;
+        }
+
+        $this->activeTab = $tab;
+        $this->resetPage();
     }
 
     private function loadSettings(): void
@@ -84,26 +101,71 @@ class Malipo extends Component
 
     public function saveSettings(): void
     {
-        SettingsService::set('payment.commission_rate', $this->commissionRate);
-        SettingsService::set('payment.min_withdrawal', $this->minWithdrawal);
-        SettingsService::set('payment.max_withdrawal_daily', $this->maxWithdrawalDaily);
-        SettingsService::set('payment.min_deposit', $this->minDeposit);
-        SettingsService::set('payment.auto_release_days', $this->autoReleaseDays);
-        SettingsService::set('payment.payout_delay_hours', $this->payoutDelayHours);
+        try {
+            SettingsService::set('payment.commission_rate', $this->commissionRate);
+            SettingsService::set('payment.min_withdrawal', $this->minWithdrawal);
+            SettingsService::set('payment.max_withdrawal_daily', $this->maxWithdrawalDaily);
+            SettingsService::set('payment.min_deposit', $this->minDeposit);
+            SettingsService::set('payment.auto_release_days', $this->autoReleaseDays);
+            SettingsService::set('payment.payout_delay_hours', $this->payoutDelayHours);
 
-        SettingsService::set('subscription.msingi_price', $this->subscriptionPrices['msingi']);
-        SettingsService::set('subscription.kawaida_price', $this->subscriptionPrices['kawaida']);
-        SettingsService::set('subscription.bora_price', $this->subscriptionPrices['bora']);
+            SettingsService::set('subscription.msingi_price', $this->subscriptionPrices['msingi'] ?? '');
+            SettingsService::set('subscription.kawaida_price', $this->subscriptionPrices['kawaida'] ?? '');
+            SettingsService::set('subscription.bora_price', $this->subscriptionPrices['bora'] ?? '');
 
-        $this->logAdminAction('update_payment_settings', null, [
-            'new_values' => [
-                'commission_rate' => $this->commissionRate,
-                'min_withdrawal' => $this->minWithdrawal,
-                'subscription_prices' => $this->subscriptionPrices,
-            ],
-        ]);
+            $this->logAdminAction('update_payment_settings', null, [
+                'new' => [
+                    'commission_rate' => $this->commissionRate,
+                    'min_withdrawal' => $this->minWithdrawal,
+                    'subscription_prices' => $this->subscriptionPrices,
+                ],
+            ]);
 
-        $this->dispatch('toast', message: 'Payment settings saved', type: 'success');
+            $this->loadSettings();
+
+            $this->dispatch('toast', message: __('messages.admin_malipo.settings_saved'), type: 'success');
+        } catch (\Throwable $e) {
+            report($e);
+            $this->dispatch('toast', message: __('messages.admin_malipo.settings_save_failed'), type: 'error');
+        }
+    }
+
+    public function testSnippeConnection(): void
+    {
+        $key = (string) config('services.snippe.key', '');
+        $baseUrl = rtrim((string) config('services.snippe.url', 'https://api.snippe.sh'), '/');
+
+        if ($key === '') {
+            $this->dispatch('toast', message: __('messages.admin_malipo.snippe_no_key'), type: 'error');
+
+            return;
+        }
+
+        try {
+            $response = Http::timeout(12)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$key,
+                    'Accept' => 'application/json',
+                ])
+                ->get($baseUrl.'/v1/payments', ['limit' => 1]);
+
+            if ($response->successful()) {
+                $this->dispatch('toast', message: __('messages.admin_malipo.snippe_ok'), type: 'success');
+
+                return;
+            }
+
+            if ($response->status() === 401 || $response->status() === 403) {
+                $this->dispatch('toast', message: __('messages.admin_malipo.snippe_auth_failed'), type: 'error');
+
+                return;
+            }
+
+            $this->dispatch('toast', message: __('messages.admin_malipo.snippe_http', ['status' => $response->status()]), type: 'warning');
+        } catch (\Throwable $e) {
+            report($e);
+            $this->dispatch('toast', message: __('messages.admin_malipo.snippe_unreachable'), type: 'error');
+        }
     }
 
     private function getTransactionsQuery()
@@ -347,6 +409,21 @@ class Malipo extends Component
         $this->dispatch('download', data: $csv, filename: 'transactions_export.csv');
     }
 
+    /**
+     * Sum subscription payments (amount_paid) for the current calendar month by plan slug.
+     */
+    public function subscriptionMonthlyTotalByPlan(string $planSlug): float
+    {
+        return (float) Subscription::query()
+            ->where(function ($q) use ($planSlug) {
+                $q->whereHas('subscriptionPlan', fn ($q2) => $q2->where('slug', $planSlug))
+                    ->orWhere('plan_slug', $planSlug);
+            })
+            ->whereYear('created_at', now()->year)
+            ->whereMonth('created_at', now()->month)
+            ->sum('amount_paid');
+    }
+
     private function logAdminAction(string $action, $model, array $changes = []): void
     {
         \App\Models\AdminAuditLog::create([
@@ -354,8 +431,8 @@ class Malipo extends Component
             'action' => $action,
             'model_type' => $model ? get_class($model) : null,
             'model_id' => $model?->id,
-            'old_values' => $changes['old'] ?? null,
-            'new_values' => $changes['new'] ?? null,
+            'old_values' => $changes['old'] ?? $changes['old_values'] ?? null,
+            'new_values' => $changes['new'] ?? $changes['new_values'] ?? null,
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
         ]);

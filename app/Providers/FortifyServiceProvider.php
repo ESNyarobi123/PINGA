@@ -4,8 +4,11 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -27,6 +30,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
+        $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -38,6 +42,28 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+    }
+
+    private function configureAuthentication(): void
+    {
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $username = Fortify::username();
+            $user = User::where($username, $request->{$username})->first();
+
+            $hash = $user?->getRawOriginal('password');
+            $plain = trim((string) $request->password);
+
+            if (! $user || ! is_string($hash) || $hash === '' || ! Hash::check($plain, $hash)) {
+                return null;
+            }
+
+            if ($user->suspended_at) {
+                session()->flash('suspension_appeal', $user->suspensionAppealFlashData());
+                throw new HttpResponseException(redirect()->route('account-suspended'));
+            }
+
+            return $user;
+        });
     }
 
     /**

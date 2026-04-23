@@ -26,6 +26,14 @@ class VerifyOtp extends Component
         if (! session()->has('pending_user_id')) {
             return redirect()->route('login');
         }
+
+        $user = User::find(session('pending_user_id'));
+        if ($user && $user->suspended_at) {
+            session()->forget(['pending_user_id', 'remember_login']);
+            session()->flash('suspension_appeal', $user->suspensionAppealFlashData());
+
+            return redirect()->route('account-suspended');
+        }
     }
 
     public function verify()
@@ -38,6 +46,13 @@ class VerifyOtp extends Component
 
         if (! $user) {
             return redirect()->route('login');
+        }
+
+        if ($user->suspended_at) {
+            session()->forget(['pending_user_id', 'remember_login']);
+            session()->flash('suspension_appeal', $user->suspensionAppealFlashData());
+
+            return redirect()->route('account-suspended');
         }
 
         if ($user->verifyOtp($this->otp)) {
@@ -67,6 +82,13 @@ class VerifyOtp extends Component
         $user = User::find($userId);
 
         if ($user) {
+            if ($user->suspended_at) {
+                session()->forget(['pending_user_id', 'remember_login']);
+                session()->flash('suspension_appeal', $user->suspensionAppealFlashData());
+
+                return redirect()->route('account-suspended');
+            }
+
             $otp = $user->generateOtp();
             Mail::to($user->email)->send(new SendOtpMail($otp));
 

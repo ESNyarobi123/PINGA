@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Services\SubscriptionService;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -47,6 +48,8 @@ class Subscriptions extends Component
     {
         $sub = Subscription::with('subscriptionPlan')->find($subscriptionId);
         if (! $sub) {
+            $this->dispatch('toast', message: __('messages.admin_subs.subscription_not_found'), type: 'error');
+
             return;
         }
 
@@ -61,7 +64,8 @@ class Subscriptions extends Component
             $sub->user,
             $plan,
             'admin-manual-'.$sub->id.'-'.now()->timestamp,
-            'admin'
+            'admin',
+            forceReplace: true
         );
 
         $this->dispatch('toast', message: 'Subscription imewashwa.', type: 'success');
@@ -87,35 +91,47 @@ class Subscriptions extends Component
             $user,
             $plan,
             'admin-grant-'.$user->id.'-'.now()->timestamp,
-            'admin'
+            'admin',
+            forceReplace: true
         );
 
         $this->reset(['showManualForm', 'manualUserId', 'manualPlanSlug', 'manualNotes']);
         $this->dispatch('toast', message: "Subscription ya {$plan->name} imewashwa kwa {$user->name}.", type: 'success');
     }
 
+    /**
+     * Paid, non-pending subscription rows (excludes placeholder pending Snippe rows).
+     */
+    private function paidSubscriptionQuery(): Builder
+    {
+        return Subscription::query()
+            ->whereIn('status', ['active', 'expired'])
+            ->where('payment_status', 'completed');
+    }
+
     private function getChartData(): array
     {
-        // Revenue by plan (pie chart data)
-        $revenueByPlan = Subscription::selectRaw('plan_slug, SUM(amount_paid) as total')
-            ->whereIn('status', ['active', 'expired'])
+        $paid = fn (): Builder => clone $this->paidSubscriptionQuery();
+
+        // Revenue by plan — cumulative amount_paid on each row (includes renewals on same row).
+        $revenueByPlan = $paid()->selectRaw('plan_slug, SUM(amount_paid) as total')
             ->groupBy('plan_slug')
             ->pluck('total', 'plan_slug')
             ->toArray();
 
-        // Subscriptions by plan (bar chart data)
-        $subsByPlan = Subscription::selectRaw('plan_slug, COUNT(*) as count')
-            ->whereIn('status', ['active', 'expired'])
+        // Subscription rows by plan (historical active + expired, paid).
+        $subsByPlan = $paid()->selectRaw('plan_slug, COUNT(*) as count')
             ->groupBy('plan_slug')
             ->pluck('count', 'plan_slug')
             ->toArray();
 
-        // Monthly revenue trend (last 6 months)
+        // New subscription rows created per month (renewals update same row → not counted here).
         $monthlyRevenue = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = now()->subMonths($i);
-            $revenue = Subscription::whereMonth('starts_at', $month->month)
-                ->whereYear('starts_at', $month->year)
+            $revenue = $paid()
+                ->whereMonth('created_at', $month->month)
+                ->whereYear('created_at', $month->year)
                 ->sum('amount_paid');
             $monthlyRevenue[] = [
                 'month' => $month->format('M Y'),
@@ -123,13 +139,13 @@ class Subscriptions extends Component
             ];
         }
 
-        // Daily new subscriptions (last 30 days)
+        // New paid subscription rows per day (by created_at).
         $dailySubs = [];
         for ($i = 29; $i >= 0; $i--) {
-            $date = now()->subDays($i)->toDateString();
-            $count = Subscription::whereDate('starts_at', $date)->count();
+            $day = now()->subDays($i);
+            $count = $paid()->whereDate('created_at', $day->toDateString())->count();
             $dailySubs[] = [
-                'date' => now()->subDays($i)->format('d M'),
+                'date' => $day->format('d M'),
                 'count' => $count,
             ];
         }
@@ -171,10 +187,10 @@ class Subscriptions extends Component
         $stats = [
             'total_active' => Subscription::active()->count(),
             'total_expired' => Subscription::where('status', 'expired')->count(),
-            'revenue_total' => Subscription::whereIn('status', ['active', 'expired'])
-                ->sum('amount_paid'),
-            'revenue_month' => Subscription::where('status', 'active')
-                ->where('starts_at', '>=', now()->startOfMonth())
+            'revenue_total' => (clone $this->paidSubscriptionQuery())->sum('amount_paid'),
+            // New paid rows created this month (excludes renewal-only updates on existing rows).
+            'revenue_month' => (clone $this->paidSubscriptionQuery())
+                ->where('created_at', '>=', now()->startOfMonth())
                 ->sum('amount_paid'),
         ];
 

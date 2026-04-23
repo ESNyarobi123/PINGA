@@ -10,8 +10,8 @@
                 <flux:dropdown>
                     <flux:button variant="filled" color="zinc" icon-trailing="chevron-down">{{ __('messages.admin_users.bulk_action') }} ({{ count($selectedUsers) }})</flux:button>
                     <flux:menu>
-                        <flux:menu.item icon="check-badge" wire:click="$dispatch('toast', {message: 'Wamethibitishwa!'})">{{ __('messages.admin_users.verify_nida') }}</flux:menu.item>
-                        <flux:menu.item icon="exclamation-triangle" color="red">{{ __('messages.admin_users.suspend_account') }}</flux:menu.item>
+                        <flux:menu.item icon="check-badge" wire:click="bulkVerifyUsers" wire:confirm="{{ __('messages.admin_users.bulk_verify_confirm') }}">{{ __('messages.admin_users.verify_nida') }}</flux:menu.item>
+                        <flux:menu.item icon="exclamation-triangle" color="red" wire:click="bulkSuspendUsers" wire:confirm="{{ __('messages.admin_users.bulk_suspend_confirm') }}">{{ __('messages.admin_users.suspend_account') }}</flux:menu.item>
                     </flux:menu>
                 </flux:dropdown>
             @endif

@@ -48,6 +48,9 @@
                     <flux:sidebar.item icon="clipboard-document-list" :href="route('mteja.huduma')" :current="request()->routeIs('mteja.huduma')" wire:navigate>
                         {{ __('messages.mteja_sidebar.browse_services') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="banknotes" :href="route('mteja.huduma-malipo')" :current="request()->routeIs('mteja.huduma-malipo')" wire:navigate>
+                        {{ __('messages.mteja_sidebar.huduma_payments') }}
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="wallet" :href="route('mteja.wallet')" :current="request()->routeIs('mteja.wallet')" wire:navigate>
                         {{ __('messages.mteja_sidebar.wallet') }}
                     </flux:sidebar.item>

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Winga;
 
+use App\Exceptions\SubscriptionPurchaseNotAllowedException;
 use App\Models\SubscriptionPlan;
 use App\Services\SnippePaymentService;
 use App\Services\SubscriptionLimitsService;
@@ -50,14 +51,18 @@ class Subscription extends Component
 
         $this->loading = true;
 
-        match ($this->paymentMethod) {
-            'wallet' => $this->payViaWallet($user, $plan),
-            'mobile' => $this->payViaMobile($user, $plan),
-            'card' => $this->payViaCard($user, $plan),
-            default => $this->dispatch('toast', message: 'Njia ya malipo si sahihi.', type: 'error'),
-        };
-
-        $this->loading = false;
+        try {
+            match ($this->paymentMethod) {
+                'wallet' => $this->payViaWallet($user, $plan),
+                'mobile' => $this->payViaMobile($user, $plan),
+                'card' => $this->payViaCard($user, $plan),
+                default => $this->dispatch('toast', message: 'Njia ya malipo si sahihi.', type: 'error'),
+            };
+        } catch (SubscriptionPurchaseNotAllowedException $e) {
+            $this->dispatch('toast', message: $e->getMessage(), type: 'error');
+        } finally {
+            $this->loading = false;
+        }
     }
 
     private function payViaWallet($user, SubscriptionPlan $plan): void
@@ -68,7 +73,6 @@ class Subscription extends Component
                 message: "Salio halitoshi. Unahitaji TZS {$needed} zaidi. Tumia Mobile Money au Kadi kulipa subscription.",
                 type: 'error',
             );
-            $this->loading = false;
 
             return;
         }
@@ -91,7 +95,6 @@ class Subscription extends Component
         $phone = preg_replace('/[^0-9]/', '', $this->phone);
         if (empty($phone)) {
             $this->dispatch('toast', message: 'Ingiza namba ya simu.', type: 'error');
-            $this->loading = false;
 
             return;
         }
@@ -131,7 +134,6 @@ class Subscription extends Component
             $pending->delete();
             $this->dispatch('toast', message: 'Malipo hayakufanikiwa. Jaribu tena au tumia njia nyingine.', type: 'error');
         }
-        $this->loading = false;
     }
 
     private function payViaCard($user, SubscriptionPlan $plan): void
@@ -160,12 +162,10 @@ class Subscription extends Component
         );
 
         if ($result && isset($result['data']['authorization_url'])) {
-            $this->loading = false;
             $this->redirect($result['data']['authorization_url'], navigate: false);
         } else {
             $pending->delete();
             $this->dispatch('toast', message: 'Malipo ya kadi hayakufanikiwa. Jaribu tena.', type: 'error');
-            $this->loading = false;
         }
     }
 

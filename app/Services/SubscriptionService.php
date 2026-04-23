@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\SubscriptionPurchaseNotAllowedException;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
@@ -13,17 +14,100 @@ use Illuminate\Support\Facades\Log;
 class SubscriptionService
 {
     /**
-     * Activate a subscription for a user after successful payment.
-     * Called by webhook handler or wallet payment path.
+     * Days before expiry when the same plan may be purchased again (extends {@see Subscription::$expires_at}).
      */
-    public function activate(
+    private function renewalWindowDays(): int
+    {
+        return max(1, (int) config('subscription.renewal_days_before_expiry', 7));
+    }
+
+    public function mayRenewEarly(Subscription $active): bool
+    {
+        if ($active->expires_at === null) {
+            return false;
+        }
+
+        $windowStart = $active->expires_at->copy()->subDays($this->renewalWindowDays());
+
+        return now()->greaterThanOrEqualTo($windowStart);
+    }
+
+    /**
+     * @throws SubscriptionPurchaseNotAllowedException
+     */
+    public function assertPurchaseAllowed(User $user, SubscriptionPlan $plan): void
+    {
+        $active = $this->getActivePlan($user);
+        if (! $active) {
+            return;
+        }
+
+        if ((int) $active->subscription_plan_id !== (int) $plan->id) {
+            throw new SubscriptionPurchaseNotAllowedException(
+                __('messages.subscription.purchase_plan_change_blocked', [
+                    'date' => $active->expires_at?->format('d M Y') ?? '',
+                ])
+            );
+        }
+
+        if (! $this->mayRenewEarly($active)) {
+            throw new SubscriptionPurchaseNotAllowedException(
+                __('messages.subscription.purchase_renewal_too_early', [
+                    'date' => $active->expires_at?->format('d M Y') ?? '',
+                    'days' => $this->renewalWindowDays(),
+                ])
+            );
+        }
+    }
+
+    /**
+     * After external or wallet payment: extend current term if same plan in renewal window, else start/replace cycle.
+     * Admin flows should use {@see activate()} with $forceReplace = true instead.
+     *
+     * @throws SubscriptionPurchaseNotAllowedException
+     */
+    public function fulfillAfterPayment(
+        User $user,
+        SubscriptionPlan $plan,
+        string $paymentReference,
+        string $paymentMethod = 'wallet'
+    ): Subscription {
+        $active = $this->getActivePlan($user);
+
+        if ($active && (int) $active->subscription_plan_id !== (int) $plan->id) {
+            throw new SubscriptionPurchaseNotAllowedException(
+                __('messages.subscription.purchase_plan_change_blocked', [
+                    'date' => $active->expires_at?->format('d M Y') ?? '',
+                ])
+            );
+        }
+
+        if ($active && (int) $active->subscription_plan_id === (int) $plan->id) {
+            if (! $this->mayRenewEarly($active)) {
+                throw new SubscriptionPurchaseNotAllowedException(
+                    __('messages.subscription.purchase_renewal_too_early', [
+                        'date' => $active->expires_at?->format('d M Y') ?? '',
+                        'days' => $this->renewalWindowDays(),
+                    ])
+                );
+            }
+
+            return $this->renewSubscription($user, $active, $plan, $paymentReference, $paymentMethod);
+        }
+
+        return $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+    }
+
+    /**
+     * Expire active rows and create a new subscription (admin override or first purchase after expiry).
+     */
+    public function activateReplaceExisting(
         User $user,
         SubscriptionPlan $plan,
         string $paymentReference,
         string $paymentMethod = 'wallet'
     ): Subscription {
         return DB::transaction(function () use ($user, $plan, $paymentReference, $paymentMethod) {
-            // Expire any currently active subscriptions first
             Subscription::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->update(['status' => 'expired']);
@@ -53,10 +137,62 @@ class SubscriptionService
                 action_label: 'Angalia Subscription',
             ));
 
-            Log::info("Subscription activated: user={$user->id} plan={$plan->slug} ref={$paymentReference}");
+            Log::info("Subscription activated (new): user={$user->id} plan={$plan->slug} ref={$paymentReference}");
 
             return $subscription;
         });
+    }
+
+    protected function renewSubscription(
+        User $user,
+        Subscription $active,
+        SubscriptionPlan $plan,
+        string $paymentReference,
+        string $paymentMethod
+    ): Subscription {
+        $newExpires = $active->expires_at->copy()->addDays($plan->duration_days);
+        $active->update([
+            'expires_at' => $newExpires,
+            'amount_paid' => (float) $active->amount_paid + (float) $plan->price,
+            'payment_reference' => $paymentReference,
+            'payment_method' => $paymentMethod,
+            'payment_status' => 'completed',
+            'status' => 'active',
+        ]);
+
+        $active = $active->fresh();
+
+        $user->notify(new WingaNotification(
+            title: '✅ Subscription imeongezwa',
+            message: "Muda wa mpango wa {$plan->name} umeongezwa. Unaendelea kuonekana kwenye Winga Bora hadi ".$active->expires_at->format('d M Y').'.',
+            icon: 'star',
+            color: 'green',
+            action_url: route('winga.subscription'),
+            action_label: 'Angalia Subscription',
+        ));
+
+        Log::info("Subscription renewed: user={$user->id} plan={$plan->slug} ref={$paymentReference}");
+
+        return $active;
+    }
+
+    /**
+     * @param  bool  $forceReplace  When true (admin), always expire actives and create a new row.
+     *
+     * @throws SubscriptionPurchaseNotAllowedException When $forceReplace is false and purchase is not allowed.
+     */
+    public function activate(
+        User $user,
+        SubscriptionPlan $plan,
+        string $paymentReference,
+        string $paymentMethod = 'wallet',
+        bool $forceReplace = false
+    ): Subscription {
+        if ($forceReplace) {
+            return $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+        }
+
+        return $this->fulfillAfterPayment($user, $plan, $paymentReference, $paymentMethod);
     }
 
     /**
@@ -68,6 +204,8 @@ class SubscriptionService
         SubscriptionPlan $plan,
         string $paymentReference
     ): Subscription {
+        $this->assertPurchaseAllowed($user, $plan);
+
         return Subscription::create([
             'user_id' => $user->id,
             'subscription_plan_id' => $plan->id,
@@ -88,6 +226,8 @@ class SubscriptionService
      */
     public function payFromWallet(User $user, SubscriptionPlan $plan): Subscription
     {
+        $this->assertPurchaseAllowed($user, $plan);
+
         return DB::transaction(function () use ($user, $plan) {
             $reference = 'wallet-sub-'.$user->id.'-'.now()->timestamp;
 
@@ -105,7 +245,7 @@ class SubscriptionService
                 'status' => 'completed',
             ]);
 
-            return $this->activate($user, $plan, $reference, 'wallet');
+            return $this->fulfillAfterPayment($user, $plan, $reference, 'wallet');
         });
     }
 

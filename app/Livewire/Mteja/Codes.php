@@ -3,7 +3,9 @@
 namespace App\Livewire\Mteja;
 
 use App\Models\Job;
+use App\Models\ServiceRequest;
 use App\Notifications\WingaNotification;
+use App\Support\ServicePackageSchema;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -15,7 +17,9 @@ class Codes extends Component
 
     public string $holdComment = '';
 
-    public ?int $extendingJobId = null;
+    public ?string $extendingHoldKind = null;
+
+    public ?int $extendingHoldId = null;
 
     public function generateCode(int $jobId): void
     {
@@ -31,19 +35,50 @@ class Codes extends Component
         $code = $job->generateCompletionCode();
         $this->generatedCodes[$jobId] = $code;
 
-        // Notify worker that code has been generated
         if ($job->hiredWorker) {
             $job->hiredWorker->notify(new WingaNotification(
-                title: '🔑 Code Imekusanywa!',
-                message: 'Muajili ametengeneza code ya kukamilisha kazi "' . $job->title . '". Ingiza code ukiwa kwenye page ya Weka Code.',
+                title: __('messages.codes.notify_worker_code_title'),
+                message: __('messages.codes.notify_worker_code_job', ['title' => $job->title]),
                 icon: 'key',
                 color: 'green',
                 action_url: route('winga.weka-code'),
-                action_label: 'Weka Code Sasa'
+                action_label: __('messages.codes.notify_worker_code_action')
             ));
         }
 
-        $this->dispatch('toast', message: 'Msimbo umetengenezwa kikamilifu! Mfanyakazi amearifiwa.', type: 'success');
+        $this->dispatch('toast', message: __('messages.codes.toast_code_generated'), type: 'success');
+    }
+
+    public function generateServiceRequestCode(int $serviceRequestId): void
+    {
+        $req = ServiceRequest::query()
+            ->where('client_id', auth()->id())
+            ->where('id', $serviceRequestId)
+            ->where('status', 'in_progress')
+            ->whereHas('payment', fn ($q) => $q->where('status', 'escrowed'))
+            ->with('service.user')
+            ->first();
+
+        if (! $req) {
+            return;
+        }
+
+        $code = $req->generateCompletionCode();
+        $this->generatedCodes['sr_'.$serviceRequestId] = $code;
+
+        $winga = $req->service->user;
+        if ($winga) {
+            $winga->notify(new WingaNotification(
+                title: __('messages.codes.notify_worker_code_title'),
+                message: __('messages.codes.notify_worker_code_service', ['title' => $req->service->title]),
+                icon: 'key',
+                color: 'green',
+                action_url: route('winga.weka-code'),
+                action_label: __('messages.codes.notify_worker_code_action')
+            ));
+        }
+
+        $this->dispatch('toast', message: __('messages.codes.toast_code_generated'), type: 'success');
     }
 
     public function holdCode(int $jobId): void
@@ -62,45 +97,90 @@ class Codes extends Component
 
         if ($job->hiredWorker) {
             $job->hiredWorker->notify(new WingaNotification(
-                title: '⏸️ Malipo Yameshikiliwa Muda',
-                message: 'Muajili ameweka kazi "'.$job->title.'" kwenye tathmini kwa masaa 3. Wasiliana nao ili utatue tatizo kabla ya muda haujaisha.',
+                title: __('messages.codes.notify_hold_title'),
+                message: __('messages.codes.notify_hold_job', ['title' => $job->title]),
                 icon: 'clock',
                 color: 'amber',
                 action_url: route('messages'),
-                action_label: 'Fungua Chat'
+                action_label: __('messages.codes.notify_hold_action')
             ));
         }
 
-        $this->dispatch('toast', message: 'Kazi imewekwa kwenye tathmini kwa masaa 3. Winga amearifiwa.', type: 'warning');
+        $this->dispatch('toast', message: __('messages.codes.toast_hold'), type: 'warning');
     }
 
-    public function openExtendForm(int $jobId): void
+    public function holdServiceRequestCode(int $serviceRequestId): void
     {
-        $this->extendingJobId = $jobId;
+        $req = ServiceRequest::query()
+            ->where('client_id', auth()->id())
+            ->where('id', $serviceRequestId)
+            ->where('status', 'in_progress')
+            ->with(['service.user:id,name', 'service:id,title,user_id'])
+            ->first();
+
+        if (! $req) {
+            return;
+        }
+
+        $req->holdCode(3);
+
+        $winga = $req->service->user;
+        if ($winga) {
+            $winga->notify(new WingaNotification(
+                title: __('messages.codes.notify_hold_title'),
+                message: __('messages.codes.notify_hold_service', ['title' => $req->service->title]),
+                icon: 'clock',
+                color: 'amber',
+                action_url: route('messages'),
+                action_label: __('messages.codes.notify_hold_action')
+            ));
+        }
+
+        $this->dispatch('toast', message: __('messages.codes.toast_hold'), type: 'warning');
+    }
+
+    public function openExtendForm(string $kind, int $id): void
+    {
+        $this->extendingHoldKind = $kind;
+        $this->extendingHoldId = $id;
         $this->holdComment = '';
     }
 
     public function closeExtendForm(): void
     {
-        $this->extendingJobId = null;
+        $this->extendingHoldKind = null;
+        $this->extendingHoldId = null;
         $this->holdComment = '';
     }
 
     public function extendHold(): void
     {
-        if (! $this->extendingJobId) {
+        if (! $this->extendingHoldKind || ! $this->extendingHoldId) {
             return;
         }
 
         $this->validate([
             'holdComment' => 'required|string|min:10|max:500',
         ], [
-            'holdComment.required' => 'Tafadhali andika sababu ya kuongeza muda.',
-            'holdComment.min' => 'Sababu lazima iwe na angalau herufi 10.',
+            'holdComment.required' => __('messages.codes.extend_comment_required'),
+            'holdComment.min' => __('messages.codes.extend_comment_min'),
         ]);
 
+        if ($this->extendingHoldKind === 'job') {
+            $this->extendHoldJob();
+
+            return;
+        }
+
+        if ($this->extendingHoldKind === 'service_request') {
+            $this->extendHoldServiceRequest();
+        }
+    }
+
+    private function extendHoldJob(): void
+    {
         $job = Job::where('employer_id', auth()->id())
-            ->where('id', $this->extendingJobId)
+            ->where('id', $this->extendingHoldId)
             ->where('status', 'in_progress')
             ->with('hiredWorker:id,name')
             ->first();
@@ -110,24 +190,65 @@ class Codes extends Component
         }
 
         if (! $job->extendHold($this->holdComment)) {
-            $this->dispatch('toast', message: 'Huwezi kuongeza muda zaidi ya mara moja.', type: 'error');
+            $this->dispatch('toast', message: __('messages.codes.extend_once'), type: 'error');
+
             return;
         }
 
         if ($job->hiredWorker) {
             $job->hiredWorker->notify(new WingaNotification(
-                title: '⏸️ Muda wa Tathmini Umeongezwa',
-                message: 'Muajili ameongeza muda wa tathmini kwa masaa 3 zaidi kwa kazi "'.$job->title.'". Sababu: '.$this->holdComment,
+                title: __('messages.codes.notify_extend_title'),
+                message: __('messages.codes.notify_extend_job', [
+                    'title' => $job->title,
+                    'comment' => $this->holdComment,
+                ]),
                 icon: 'clock',
                 color: 'amber',
                 action_url: route('messages'),
-                action_label: 'Fungua Chat'
+                action_label: __('messages.codes.notify_hold_action')
             ));
         }
 
-        $this->extendingJobId = null;
-        $this->holdComment = '';
-        $this->dispatch('toast', message: 'Muda umeongezwa kwa masaa 3 zaidi. Winga amearifiwa.', type: 'warning');
+        $this->closeExtendForm();
+        $this->dispatch('toast', message: __('messages.codes.toast_extend'), type: 'warning');
+    }
+
+    private function extendHoldServiceRequest(): void
+    {
+        $req = ServiceRequest::query()
+            ->where('client_id', auth()->id())
+            ->where('id', $this->extendingHoldId)
+            ->where('status', 'in_progress')
+            ->with(['service.user:id,name', 'service:id,title,user_id'])
+            ->first();
+
+        if (! $req) {
+            return;
+        }
+
+        if (! $req->extendHold($this->holdComment)) {
+            $this->dispatch('toast', message: __('messages.codes.extend_once'), type: 'error');
+
+            return;
+        }
+
+        $winga = $req->service->user;
+        if ($winga) {
+            $winga->notify(new WingaNotification(
+                title: __('messages.codes.notify_extend_title'),
+                message: __('messages.codes.notify_extend_service', [
+                    'title' => $req->service->title,
+                    'comment' => $this->holdComment,
+                ]),
+                icon: 'clock',
+                color: 'amber',
+                action_url: route('messages'),
+                action_label: __('messages.codes.notify_hold_action')
+            ));
+        }
+
+        $this->closeExtendForm();
+        $this->dispatch('toast', message: __('messages.codes.toast_extend'), type: 'warning');
     }
 
     public function render()
@@ -137,11 +258,26 @@ class Codes extends Component
             ->whereNotNull('hired_worker_id')
             ->with(['hiredWorker:id,name,phone', 'payment'])
             ->latest()
-            ->paginate(10);
+            ->paginate(10, ['*'], 'jobsPage');
+
+        $serviceWith = ['service.user:id,name,phone', 'payment'];
+        if (ServicePackageSchema::hasPackagesTable()) {
+            $serviceWith[] = 'package:id,title,service_id';
+        }
+
+        $serviceRequests = ServiceRequest::query()
+            ->where('client_id', auth()->id())
+            ->where('status', 'in_progress')
+            ->whereHas('payment', fn ($q) => $q->where('status', 'escrowed'))
+            ->with($serviceWith)
+            ->latest()
+            ->paginate(10, ['*'], 'srPage');
 
         return view('livewire.mteja.codes', [
             'jobs' => $jobs,
+            'serviceRequests' => $serviceRequests,
+            'usesServicePackages' => ServicePackageSchema::hasPackagesTable(),
         ])->layout('layouts.mteja')
-            ->title('Codes za Kazi');
+            ->title(__('messages.codes.title'));
     }
 }

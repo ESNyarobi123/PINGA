@@ -2,11 +2,12 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\AdminAuditLog;
+use App\Models\BroadcastMessage;
 use App\Models\Conversation;
 use App\Models\Message;
-use App\Models\User;
-use App\Models\BroadcastMessage;
-use App\Models\AdminAuditLog;
+use App\Notifications\AdminBroadcastNotification;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -15,25 +16,37 @@ class Mazungumzo extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $filterStatus = '';
+
     public string $filterType = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public string $activeTab = 'conversations';
 
     // Conversation viewing
     public ?int $activeConversationId = null;
+
     public array $messages = [];
+
     public string $replyMessage = '';
 
     // Broadcast message
     public string $broadcastTitle = '';
+
     public string $broadcastMessage = '';
-    public string $broadcastType = '';
-    public array $targetAudience = [];
+
+    public string $broadcastType = 'announcement';
+
+    /** @var array<int, string> */
+    public array $targetAudience = ['all'];
 
     // Sorting
     public string $sortField = 'updated_at';
+
     public string $sortDirection = 'desc';
 
     protected $queryString = [
@@ -63,7 +76,7 @@ class Mazungumzo extends Component
 
     public function updatingSearch(): void
     {
-        $this->resetPage();
+        $this->resetPage('conversationsPage');
     }
 
     public function viewConversation(int $id): void
@@ -72,7 +85,7 @@ class Mazungumzo extends Component
 
         $conv = Conversation::with(['messages.sender:id,name,avatar'])->find($id);
 
-        if (!$conv) {
+        if (! $conv) {
             return;
         }
 
@@ -84,8 +97,8 @@ class Mazungumzo extends Component
             'body' => $msg->body,
             'sender_name' => $msg->sender->name ?? '—',
             'sender_avatar' => $msg->sender && $msg->sender->avatar
-                ? asset('storage/' . $msg->sender->avatar)
-                : 'https://ui-avatars.com/api/?name=' . urlencode($msg->sender->name ?? 'U') . '&background=8b5cf6&color=fff&size=40',
+                ? asset('storage/'.$msg->sender->avatar)
+                : 'https://ui-avatars.com/api/?name='.urlencode($msg->sender->name ?? 'U').'&background=8b5cf6&color=fff&size=40',
             'sender_type' => $this->getSenderType($msg->sender_id, $conv),
             'time' => $msg->created_at->format('d M Y, H:i'),
             'is_admin' => $msg->sender_id === auth()->id(),
@@ -103,6 +116,7 @@ class Mazungumzo extends Component
         if ($senderId === $conversation->worker_id) {
             return 'worker';
         }
+
         return 'unknown';
     }
 
@@ -115,12 +129,12 @@ class Mazungumzo extends Component
 
     public function sendReply(): void
     {
-        if (!$this->activeConversationId || !$this->replyMessage) {
+        if (! $this->activeConversationId || ! $this->replyMessage) {
             return;
         }
 
         $conversation = Conversation::find($this->activeConversationId);
-        
+
         Message::create([
             'conversation_id' => $this->activeConversationId,
             'sender_id' => auth()->id(),
@@ -146,28 +160,55 @@ class Mazungumzo extends Component
             'broadcastMessage' => 'required|string',
             'broadcastType' => 'required|in:announcement,maintenance,warning,info',
             'targetAudience' => 'required|array|min:1',
+            'targetAudience.*' => 'in:all,clients,workers,premium',
         ]);
 
-        $broadcast = BroadcastMessage::create([
-            'title' => $this->broadcastTitle,
-            'body' => $this->broadcastMessage,
-            'admin_id' => auth()->id(),
-            'target_type' => $this->targetAudience[0] ?? 'all',
-            'channels' => ['app'],
-            'status' => 'sent',
-            'sent_at' => now(),
-        ]);
+        $segments = BroadcastMessage::segmentsFromUiAudience($this->targetAudience);
+        if ($segments === []) {
+            $this->addError('targetAudience', __('Invalid target audience selection.'));
 
-        // TODO: Implement actual notification sending to target audience
-        // This would integrate with your notification system
+            return;
+        }
 
-        $this->logAdminAction('send_broadcast', $broadcast, [
-            'target_audience' => $this->targetAudience,
-            'type' => $this->broadcastType,
-        ]);
+        $targetType = BroadcastMessage::storageTargetTypeFromSegments($segments);
+
+        try {
+            $broadcast = BroadcastMessage::create([
+                'title' => $this->broadcastTitle,
+                'body' => $this->broadcastMessage,
+                'announcement_type' => $this->broadcastType,
+                'admin_id' => auth()->id(),
+                'target_type' => $targetType,
+                'target_segments' => $segments,
+                'channels' => ['app'],
+                'status' => 'sent',
+                'sent_at' => now(),
+            ]);
+
+            $recipients = $broadcast->getRecipients();
+            Notification::send($recipients, new AdminBroadcastNotification($broadcast));
+            $broadcast->update(['recipient_count' => $recipients->count()]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            report($e);
+            $this->dispatch('toast', message: __('messages.admin_comms.broadcast_save_failed'), type: 'error');
+
+            return;
+        }
+
+        try {
+            $this->logAdminAction('send_broadcast', $broadcast, [
+                'target_audience' => $this->targetAudience,
+                'target_segments' => $segments,
+                'type' => $this->broadcastType,
+                'recipient_count' => $recipients->count(),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         $this->reset(['broadcastTitle', 'broadcastMessage', 'broadcastType', 'targetAudience']);
-        $this->dispatch('toast', message: 'Broadcast message sent', type: 'success');
+        $this->resetPage('broadcastsPage');
+        $this->dispatch('toast', message: __('messages.admin_comms.broadcast_sent'), type: 'success');
     }
 
     private function getConversationsQuery()
@@ -179,27 +220,27 @@ class Mazungumzo extends Component
                 'job:id,title',
                 'latestMessage',
             ])
-            ->when($this->search, fn($query) => $query
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->whereHas('employer', fn($sub) => $sub->where('name', 'like', "%{$this->search}%"))
-                        ->orWhereHas('worker', fn($sub) => $sub->where('name', 'like', "%{$this->search}%"))
-                        ->orWhereHas('job', fn($sub) => $sub->where('title', 'like', "%{$this->search}%"))
-                        ->orWhereHas('messages', fn($sub) => $sub->where('body', 'like', "%{$this->search}%"));
+                    $q->whereHas('employer', fn ($sub) => $sub->where('name', 'like', "%{$this->search}%"))
+                        ->orWhereHas('worker', fn ($sub) => $sub->where('name', 'like', "%{$this->search}%"))
+                        ->orWhereHas('job', fn ($sub) => $sub->where('title', 'like', "%{$this->search}%"))
+                        ->orWhereHas('messages', fn ($sub) => $sub->where('body', 'like', "%{$this->search}%"));
                 })
             )
-            ->when($this->filterStatus, fn($query) => match ($this->filterStatus) {
+            ->when($this->filterStatus, fn ($query) => match ($this->filterStatus) {
                 'active' => $query, // All conversations since no ended_at column
                 'ended' => $query->whereRaw('1=0'), // Return none since no ended_at column
                 'unread' => $query->whereRaw('1=0'), // Return none since no admin_read_at column
                 default => $query,
             })
-            ->when($this->filterType, fn($query) => match ($this->filterType) {
+            ->when($this->filterType, fn ($query) => match ($this->filterType) {
                 'dispute' => $query->whereHas('job.disputes'),
                 'normal' => $query->whereDoesntHave('job.disputes'),
                 default => $query,
             })
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->orderBy($this->sortField, $this->sortDirection);
     }
 
@@ -207,19 +248,19 @@ class Mazungumzo extends Component
     {
         return BroadcastMessage::query()
             ->with(['admin:id,name'])
-            ->when($this->dateFrom, fn($query) => $query->whereDate('sent_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('sent_at', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('sent_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('sent_at', '<=', $this->dateTo))
             ->latest('sent_at');
     }
 
     public function getConversationsProperty()
     {
-        return $this->getConversationsQuery()->paginate(25);
+        return $this->getConversationsQuery()->paginate(25, ['*'], 'conversationsPage');
     }
 
     public function getBroadcastsProperty()
     {
-        return $this->getBroadcastsQuery()->paginate(25);
+        return $this->getBroadcastsQuery()->paginate(25, ['*'], 'broadcastsPage');
     }
 
     public function getUnreadCountProperty(): int

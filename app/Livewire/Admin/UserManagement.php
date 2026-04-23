@@ -358,7 +358,8 @@ class UserManagement extends Component
             $this->selectedUser,
             $plan,
             'admin-grant-'.$this->selectedUser->id.'-'.now()->timestamp,
-            'admin'
+            'admin',
+            forceReplace: true
         );
 
         $this->logAdminAction('grant_subscription', $this->selectedUser, [

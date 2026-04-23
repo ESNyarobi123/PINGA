@@ -211,17 +211,17 @@
                         </thead>
                         <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @foreach($job->applications as $application)
-                            <tr class="{{ $job->hired_worker_id === $application->user_id ? 'bg-green-50 dark:bg-green-900/20' : '' }}">
+                            <tr class="{{ $job->hired_worker_id === $application->worker_id ? 'bg-green-50 dark:bg-green-900/20' : '' }}" wire:key="admin-app-{{ $application->id }}">
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-3">
-                                        <img src="{{ $application->user?->avatar ? asset('storage/'.$application->user->avatar) : 'https://ui-avatars.com/api/?name='.urlencode($application->user?->name ?? 'Unknown').'&background=0d9488&color=fff&size=32' }}"
-                                             alt="{{ $application->user?->name ?? 'Unknown' }}"
+                                        <img src="{{ $application->worker?->avatar ? asset('storage/'.$application->worker->avatar) : 'https://ui-avatars.com/api/?name='.urlencode($application->worker?->name ?? 'Unknown').'&background=0d9488&color=fff&size=32' }}"
+                                             alt="{{ $application->worker?->name ?? 'Unknown' }}"
                                              class="w-8 h-8 rounded-full object-cover">
                                         <div>
-                                            <p class="font-medium text-zinc-900 dark:text-white">{{ $application->user?->name ?? 'Unknown' }}</p>
-                                            @if($application->user?->activeSubscription)
+                                            <p class="font-medium text-zinc-900 dark:text-white">{{ $application->worker?->name ?? 'Unknown' }}</p>
+                                            @if($application->worker?->activeSubscription)
                                             <span class="text-xs px-1 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
-                                                {{ $application->user->activeSubscription->subscriptionPlan?->name ?? 'Unknown Plan' }}
+                                                {{ $application->worker->activeSubscription->subscriptionPlan?->name ?? 'Unknown Plan' }}
                                             </span>
                                             @endif
                                         </div>
@@ -229,11 +229,11 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-1">
-                                        ⭐ {{ $application->user->rating ?? '—' }}
+                                        ⭐ {{ number_format($application->worker?->averageRating() ?? 0, 1) }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 font-medium text-zinc-900 dark:text-white">
-                                    TZS {{ number_format($application->bid_amount) }}
+                                    TZS {{ number_format((float) ($application->proposed_budget ?? 0)) }}
                                 </td>
                                 <td class="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                                     {{ $application->proposed_duration ?? '—' }}
@@ -372,11 +372,20 @@
                         </p>
                     </div>
 
-                    <div class="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
+                    <div class="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg min-w-0 overflow-hidden">
                         <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Code</label>
-                        <p class="text-lg font-mono font-bold text-zinc-900 dark:text-white">
-                            {{ $job->completion_code ?: '—' }}
-                        </p>
+                        @if($job->completion_code && str_starts_with($job->completion_code, '$2y$'))
+                            <p class="text-sm text-amber-800 dark:text-amber-200 leading-snug">
+                                Code ya zamani imehifadhiwa kama hash (haiwezi kuonyeshwa hapa). Bonyeza <strong>Reset Code</strong> kuunda nambari mpya ya tarakimu 6 inayofanana na mfumo wa Winga.
+                            </p>
+                            <p class="mt-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 break-all max-w-full">{{ \Illuminate\Support\Str::limit($job->completion_code, 28, '…') }}</p>
+                        @elseif($job->completion_code)
+                            <p class="text-lg font-mono font-bold text-zinc-900 dark:text-white break-all whitespace-pre-wrap max-w-full">
+                                {{ $job->completion_code }}
+                            </p>
+                        @else
+                            <p class="text-lg font-bold text-zinc-400">—</p>
+                        @endif
                     </div>
 
                     <div class="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg">

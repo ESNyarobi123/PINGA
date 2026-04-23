@@ -2,8 +2,8 @@
 
 namespace App\Livewire\Admin;
 
-use App\Models\Setting;
 use App\Models\AdminAuditLog;
+use App\Models\Setting;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
@@ -11,9 +11,13 @@ use Livewire\Component;
 class Settings extends Component
 {
     public array $settings = [];
+
     public array $categories = [];
+
     public string $activeCategory = 'general';
+
     public bool $showSaveConfirmation = false;
+
     public array $settingsToSave = [];
 
     protected $rules = [
@@ -81,6 +85,8 @@ class Settings extends Component
         'settings.enable_chat_support' => 'boolean',
         'settings.support_email' => 'nullable|email|max:255',
         'settings.support_phone' => 'nullable|string|max:20',
+        'settings.suspension_appeal_email' => 'nullable|email|max:255',
+        'settings.suspension_appeal_whatsapp' => 'nullable|string|max:32',
         'settings.enable_live_chat' => 'boolean',
         'settings.chat_widget_position' => 'required|in:bottom-right,bottom-left,top-right,top-left',
         'settings.enable_help_center' => 'boolean',
@@ -190,6 +196,9 @@ class Settings extends Component
             'enable_faq' => true,
             'enable_ticket_system' => true,
             'ticket_email' => 'tickets@winga.co.tz',
+
+            'suspension_appeal_email' => '',
+            'suspension_appeal_whatsapp' => '',
         ];
     }
 
@@ -201,10 +210,10 @@ class Settings extends Component
                 'icon' => '⚙️',
                 'description' => 'Basic platform settings',
                 'settings' => [
-                    'site_name', 'site_description', 'site_email', 'site_phone', 
+                    'site_name', 'site_description', 'site_email', 'site_phone',
                     'site_address', 'maintenance_mode', 'allow_registrations',
-                    'require_email_verification', 'require_phone_verification', 'default_user_role'
-                ]
+                    'require_email_verification', 'require_phone_verification', 'default_user_role',
+                ],
             ],
             'financial' => [
                 'name' => 'Financial',
@@ -212,16 +221,16 @@ class Settings extends Component
                 'description' => 'Payment and commission settings',
                 'settings' => [
                     'commission_rate', 'min_withdrawal_amount', 'max_withdrawal_amount',
-                    'withdrawal_fee_rate', 'auto_approve_withdrawals'
-                ]
+                    'withdrawal_fee_rate', 'auto_approve_withdrawals',
+                ],
             ],
             'payment' => [
                 'name' => 'Payment Gateway',
                 'icon' => '💳',
                 'description' => 'Payment provider configurations',
                 'settings' => [
-                    'snippe_api_key', 'snippe_secret_key', 'snippe_webhook_url'
-                ]
+                    'snippe_api_key', 'snippe_secret_key', 'snippe_webhook_url',
+                ],
             ],
             'email' => [
                 'name' => 'Email',
@@ -229,16 +238,16 @@ class Settings extends Component
                 'description' => 'Email configuration settings',
                 'settings' => [
                     'email_driver', 'mail_host', 'mail_port', 'mail_username',
-                    'mail_password', 'mail_encryption', 'mail_from_address', 'mail_from_name'
-                ]
+                    'mail_password', 'mail_encryption', 'mail_from_address', 'mail_from_name',
+                ],
             ],
             'realtime' => [
                 'name' => 'Real-time',
                 'icon' => '🔄',
                 'description' => 'WebSocket and real-time features',
                 'settings' => [
-                    'pusher_app_id', 'pusher_app_key', 'pusher_app_secret', 'pusher_app_cluster'
-                ]
+                    'pusher_app_id', 'pusher_app_key', 'pusher_app_secret', 'pusher_app_cluster',
+                ],
             ],
             'analytics' => [
                 'name' => 'Analytics',
@@ -246,8 +255,8 @@ class Settings extends Component
                 'description' => 'Tracking and analytics settings',
                 'settings' => [
                     'google_analytics_id', 'facebook_pixel_id', 'google_maps_api_key',
-                    'recaptcha_site_key', 'recaptcha_secret_key', 'enable_recaptcha'
-                ]
+                    'recaptcha_site_key', 'recaptcha_secret_key', 'enable_recaptcha',
+                ],
             ],
             'security' => [
                 'name' => 'Security',
@@ -255,8 +264,8 @@ class Settings extends Component
                 'description' => 'Security and authentication settings',
                 'settings' => [
                     'session_lifetime', 'max_login_attempts', 'lockout_duration',
-                    'password_min_length', 'enable_two_factor'
-                ]
+                    'password_min_length', 'enable_two_factor',
+                ],
             ],
             'system' => [
                 'name' => 'System',
@@ -265,8 +274,8 @@ class Settings extends Component
                 'settings' => [
                     'backup_enabled', 'backup_frequency', 'backup_retention_days',
                     'log_level', 'enable_performance_monitoring', 'enable_error_tracking',
-                    'cache_driver', 'queue_driver'
-                ]
+                    'cache_driver', 'queue_driver',
+                ],
             ],
             'notifications' => [
                 'name' => 'Notifications',
@@ -275,8 +284,8 @@ class Settings extends Component
                 'settings' => [
                     'enable_notifications', 'notification_channels', 'enable_sms_notifications',
                     'sms_provider', 'twilio_account_sid', 'twilio_auth_token', 'twilio_phone_number',
-                    'africastalking_username', 'africastalking_api_key', 'infobip_api_key', 'infobip_base_url'
-                ]
+                    'africastalking_username', 'africastalking_api_key', 'infobip_api_key', 'infobip_base_url',
+                ],
             ],
             'support' => [
                 'name' => 'Support',
@@ -284,9 +293,10 @@ class Settings extends Component
                 'description' => 'Customer support settings',
                 'settings' => [
                     'enable_chat_support', 'support_email', 'support_phone',
+                    'suspension_appeal_email', 'suspension_appeal_whatsapp',
                     'enable_live_chat', 'chat_widget_position', 'enable_help_center',
-                    'help_center_url', 'enable_faq', 'enable_ticket_system', 'ticket_email'
-                ]
+                    'help_center_url', 'enable_faq', 'enable_ticket_system', 'ticket_email',
+                ],
             ],
         ];
     }
@@ -354,7 +364,7 @@ class Settings extends Component
             }
         }
 
-        if (!empty($changedSettings)) {
+        if (! empty($changedSettings)) {
             $this->logAdminAction('update_settings', null, [
                 'category' => $this->activeCategory,
                 'changes' => $changedSettings,
@@ -442,6 +452,8 @@ class Settings extends Component
             'enable_faq' => 'Enable FAQ section',
             'enable_ticket_system' => 'Enable ticket system',
             'ticket_email' => 'Ticket system email',
+            'suspension_appeal_email' => 'Email shown to suspended users for appeals (falls back to support email)',
+            'suspension_appeal_whatsapp' => 'WhatsApp number for suspended-user appeals (falls back to support phone)',
         ];
 
         return $descriptions[$key] ?? '';
@@ -473,7 +485,7 @@ class Settings extends Component
     private function syncToSettingsService(string $key, mixed $value): void
     {
         $map = [
-            'commission_rate'       => ['platform_commission_rate', 'float'],
+            'commission_rate' => ['platform_commission_rate', 'float'],
             'min_withdrawal_amount' => ['min_withdrawal_amount', 'integer'],
             'max_withdrawal_amount' => ['max_withdrawal_daily', 'integer'],
         ];
@@ -483,9 +495,9 @@ class Settings extends Component
             SettingsService::set(
                 $platformKey,
                 match ($type) {
-                    'float'   => (float) $value,
+                    'float' => (float) $value,
                     'integer' => (int) $value,
-                    default   => $value,
+                    default => $value,
                 },
                 $type,
                 'financial',
@@ -505,7 +517,7 @@ class Settings extends Component
 
             $this->dispatch('toast', message: 'Test email sent successfully', type: 'success');
         } catch (\Exception $e) {
-            $this->dispatch('toast', message: 'Email test failed: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('toast', message: 'Email test failed: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -514,11 +526,11 @@ class Settings extends Component
         try {
             // Test SMS configuration based on provider
             $provider = $this->settings['sms_provider'];
-            
+
             // Implementation would depend on the SMS provider
             $this->dispatch('toast', message: "SMS test for {$provider} not implemented yet", type: 'info');
         } catch (\Exception $e) {
-            $this->dispatch('toast', message: 'SMS test failed: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('toast', message: 'SMS test failed: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -535,7 +547,7 @@ class Settings extends Component
             \Artisan::call('backup:run');
             $this->dispatch('toast', message: 'Backup initiated successfully', type: 'success');
         } catch (\Exception $e) {
-            $this->dispatch('toast', message: 'Backup failed: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('toast', message: 'Backup failed: '.$e->getMessage(), type: 'error');
         }
     }
 

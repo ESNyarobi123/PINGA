@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/webhooks/snippe-payout',
         ]);
         $middleware->appendToGroup('web', \App\Http\Middleware\SetLocale::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsNotSuspended::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\SetLocale::class);
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,

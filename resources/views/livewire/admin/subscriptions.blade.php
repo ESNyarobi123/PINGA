@@ -22,6 +22,7 @@
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
             <p class="text-2xl font-bold text-winga-600 dark:text-winga-400">TZS {{ number_format($stats['revenue_month']/1000, 1) }}K</p>
             <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider mt-1">{{ __('messages.admin_subs.revenue_month') }}</p>
+            <p class="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-snug">{{ __('messages.admin_subs.revenue_month_hint') }}</p>
         </div>
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
             <p class="text-2xl font-bold text-zinc-900 dark:text-white">TZS {{ number_format($stats['revenue_total']/1000, 1) }}K</p>
@@ -35,12 +36,13 @@
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
             <h4 class="font-bold text-zinc-900 dark:text-white mb-4">💰 {{ __('messages.admin_subs.revenue_by_plan') }}</h4>
             <div class="space-y-3">
-                @foreach($chartData['revenue_by_plan'] as $plan => $amount)
+                @forelse($chartData['revenue_by_plan'] as $plan => $amount)
                 <div class="flex items-center gap-3">
                     <span class="w-20 text-sm font-medium text-zinc-600 dark:text-zinc-400 capitalize">{{ $plan }}</span>
                     <div class="flex-1 h-8 bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden">
                         @php
-                            $maxRevenue = max($chartData['revenue_by_plan']);
+                            $revenueVals = array_values($chartData['revenue_by_plan']);
+                            $maxRevenue = $revenueVals !== [] ? max($revenueVals) : 0;
                             $percentage = $maxRevenue > 0 ? ($amount / $maxRevenue) * 100 : 0;
                             $color = $plan === 'bora' ? 'bg-gradient-to-r from-amber-500 to-orange-500' : ($plan === 'kawaida' ? 'bg-gradient-to-r from-sky-500 to-cyan-500' : 'bg-gradient-to-r from-zinc-400 to-zinc-500');
                         @endphp
@@ -54,7 +56,9 @@
                     <span class="text-xs font-bold text-zinc-500">TZS {{ number_format($amount/1000, 1) }}K</span>
                     @endif
                 </div>
-                @endforeach
+                @empty
+                <p class="text-sm text-zinc-500">{{ __('messages.admin_subs.chart_no_data') }}</p>
+                @endforelse
             </div>
         </div>
 
@@ -62,9 +66,10 @@
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
             <h4 class="font-bold text-zinc-900 dark:text-white mb-4">📊 {{ __('messages.admin_subs.subs_count') }}</h4>
             <div class="flex items-end justify-around h-40 gap-4">
-                @foreach($chartData['subs_by_plan'] as $plan => $count)
+                @forelse($chartData['subs_by_plan'] as $plan => $count)
                 @php
-                    $maxCount = max($chartData['subs_by_plan']);
+                    $countVals = array_values($chartData['subs_by_plan']);
+                    $maxCount = $countVals !== [] ? max($countVals) : 0;
                     $height = $maxCount > 0 ? ($count / $maxCount) * 100 : 0;
                     $color = $plan === 'bora' ? 'bg-amber-500' : ($plan === 'kawaida' ? 'bg-sky-500' : 'bg-zinc-400');
                 @endphp
@@ -73,7 +78,9 @@
                     <div class="w-full {{ $color }} rounded-t-lg transition-all" style="height: {{ max($height, 4) }}px"></div>
                     <span class="text-xs font-medium text-zinc-500 capitalize">{{ $plan }}</span>
                 </div>
-                @endforeach
+                @empty
+                <p class="text-sm text-zinc-500 self-center">{{ __('messages.admin_subs.chart_no_data') }}</p>
+                @endforelse
             </div>
         </div>
 
@@ -170,10 +177,12 @@
                     <td class="px-4 py-3">
                         @if($sub->isActive())
                             <flux:badge color="green" size="sm">{{ __('messages.admin_subs.active') }}</flux:badge>
-                        @elseif($sub->status === 'expired')
-                            <flux:badge color="zinc" size="sm">{{ __('messages.admin_subs.expired') }}</flux:badge>
                         @elseif($sub->payment_status === 'pending')
                             <flux:badge color="amber" size="sm">{{ __('messages.admin_subs.pending') }}</flux:badge>
+                        @elseif($sub->status === 'expired')
+                            <flux:badge color="zinc" size="sm">{{ __('messages.admin_subs.expired') }}</flux:badge>
+                        @elseif($sub->status === 'cancelled')
+                            <flux:badge color="red" size="sm">{{ __('messages.admin_subs.cancelled') }}</flux:badge>
                         @else
                             <flux:badge color="red" size="sm">{{ __('messages.admin_subs.suspended') }}</flux:badge>
                         @endif

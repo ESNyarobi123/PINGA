@@ -132,31 +132,31 @@
 
     {{-- Tabs --}}
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <div class="border-b border-zinc-200 dark:border-zinc-800">
-            <nav class="flex space-x-8 px-6" aria-label="Tabs">
-                <button wire:click="$set('activeTab', 'transactions')"
+        <div class="border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+            <nav class="flex gap-6 sm:gap-8 px-6 min-w-max sm:min-w-0" aria-label="Tabs">
+                <button type="button" wire:click="setActiveTab('transactions')"
                         class="{{ $activeTab === 'transactions' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
-                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition shrink-0">
                     {{ __('messages.admin_malipo.tab_transactions') }}
                 </button>
-                <button wire:click="$set('activeTab', 'escrow')"
+                <button type="button" wire:click="setActiveTab('escrow')"
                         class="{{ $activeTab === 'escrow' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
-                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition shrink-0">
                     {{ __('messages.admin_malipo.tab_escrow') }}
                 </button>
-                <button wire:click="$set('activeTab', 'withdrawals')"
+                <button type="button" wire:click="setActiveTab('withdrawals')"
                         class="{{ $activeTab === 'withdrawals' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
-                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition shrink-0">
                     {{ __('messages.admin_malipo.tab_withdrawals') }}
                 </button>
-                <button wire:click="$set('activeTab', 'subscriptions')"
+                <button type="button" wire:click="setActiveTab('subscriptions')"
                         class="{{ $activeTab === 'subscriptions' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
-                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition shrink-0">
                     {{ __('messages.admin_malipo.tab_subscriptions') }}
                 </button>
-                <button wire:click="$set('activeTab', 'settings')"
+                <button type="button" wire:click="setActiveTab('settings')"
                         class="{{ $activeTab === 'settings' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
-                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition shrink-0">
                     {{ __('messages.admin_malipo.tab_settings') }}
                 </button>
             </nav>
@@ -206,7 +206,7 @@
                         <input wire:model.live="dateTo" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
                     </div>
 
-                    <button wire:click="exportTransactions" 
+                    <button type="button" wire:click="exportTransactions" 
                             class="px-4 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition">
                         📤 {{ __('messages.admin_malipo.export_csv') }}
                     </button>
@@ -500,7 +500,7 @@
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-white">
-                                    TZS {{ number_format($subscription->amount) }}
+                                    TZS {{ number_format((float) $subscription->amount_paid) }}
                                 </td>
                                 <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">{{ $subscription->payment_method }}</td>
                                 <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
@@ -534,19 +534,19 @@
                         <div>
                             <p class="text-sm text-zinc-500">Msingi</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'msingi'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format($this->subscriptionMonthlyTotalByPlan('msingi')) }}
                             </p>
                         </div>
                         <div>
                             <p class="text-sm text-zinc-500">Kawaida</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'kawaida'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format($this->subscriptionMonthlyTotalByPlan('kawaida')) }}
                             </p>
                         </div>
                         <div>
                             <p class="text-sm text-zinc-500">Bora</p>
                             <p class="font-bold text-zinc-900 dark:text-white">
-                                TZS {{ number_format(Subscription::whereHas('subscriptionPlan', fn($q) => $q->where('slug', 'bora'))->whereMonth('created_at', now()->month)->sum('amount')) }}
+                                TZS {{ number_format($this->subscriptionMonthlyTotalByPlan('bora')) }}
                             </p>
                         </div>
                     </div>
@@ -634,13 +634,13 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <button wire:click="saveSettings" 
-                            class="px-6 py-2 bg-winga-600 hover:bg-winga-700 text-white rounded-lg font-medium transition">
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" wire:click="saveSettings" wire:loading.attr="disabled"
+                            class="px-6 py-2 bg-winga-600 hover:bg-winga-700 text-white rounded-lg font-medium transition disabled:opacity-50">
                         💾 {{ __('messages.admin_malipo.save_settings') }}
                     </button>
-                    <button wire:click="$dispatch('testSnippeConnection')" 
-                            class="px-6 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg font-medium transition">
+                    <button type="button" wire:click="testSnippeConnection" wire:loading.attr="disabled"
+                            class="px-6 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg font-medium transition disabled:opacity-50">
                         🔧 {{ __('messages.admin_malipo.test_snippe') }}
                     </button>
                 </div>

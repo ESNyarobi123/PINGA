@@ -45,14 +45,14 @@ class RetryFailedPayout implements ShouldQueue
             }
 
             $result = $snippe->sendPayout([
-                'amount'          => (int) $this->amount,
-                'phone'           => $worker->phone,
-                'name'            => $worker->name,
-                'narration'       => 'Retry: Kutoa pesa - Winga Platform',
-                'idempotency_key' => 'retry-withdrawal-' . $this->withdrawalId . '-' . now()->timestamp,
-                'metadata'        => [
-                    'type'          => 'withdrawal',
-                    'user_id'       => $this->workerId,
+                'amount' => (int) $this->amount,
+                'phone' => $worker->phone,
+                'name' => $worker->name,
+                'narration' => 'Retry: Kutoa pesa - Winga Platform',
+                'idempotency_key' => 'retry-withdrawal-'.$this->withdrawalId.'-'.now()->timestamp,
+                'metadata' => [
+                    'type' => 'withdrawal',
+                    'user_id' => $this->workerId,
                     'withdrawal_id' => $this->withdrawalId,
                 ],
             ]);
@@ -60,8 +60,8 @@ class RetryFailedPayout implements ShouldQueue
             if ($result['success']) {
                 $withdrawal->update([
                     'payout_reference' => $result['reference'],
-                    'payout_status'    => 'processing',
-                    'status'           => 'pending',
+                    'payout_status' => 'processing',
+                    'status' => 'pending',
                 ]);
 
                 Log::info("RetryFailedPayout: withdrawal {$this->withdrawalId} retried successfully.");
@@ -80,23 +80,23 @@ class RetryFailedPayout implements ShouldQueue
             }
 
             $result = $snippe->sendPayout([
-                'amount'          => (int) $payment->worker_amount,
-                'phone'           => $payment->worker->phone,
-                'name'            => $payment->worker->name,
-                'narration'       => 'Retry: Malipo ya kazi #' . $payment->job_id . ' - ' . ($payment->job->title ?? ''),
-                'idempotency_key' => 'retry-payout-' . $this->paymentId . '-' . now()->timestamp,
-                'metadata'        => [
-                    'type'       => 'payout',
-                    'job_id'     => $payment->job_id,
+                'amount' => (int) $payment->worker_amount,
+                'phone' => $payment->worker->phone,
+                'name' => $payment->worker->name,
+                'narration' => 'Retry: Malipo #'.$payment->id.' - '.($payment->escrowItemLabel() ?: ($payment->job?->title ?? 'huduma')),
+                'idempotency_key' => 'retry-payout-'.$this->paymentId.'-'.now()->timestamp,
+                'metadata' => [
+                    'type' => 'payout',
+                    'job_id' => $payment->job_id,
                     'payment_id' => $this->paymentId,
-                    'worker_id'  => $payment->worker_id,
+                    'worker_id' => $payment->worker_id,
                 ],
             ]);
 
             if ($result['success']) {
                 $payment->update([
                     'payout_reference' => $result['reference'],
-                    'payout_status'    => 'processing',
+                    'payout_status' => 'processing',
                 ]);
 
                 Log::info("RetryFailedPayout: payment {$this->paymentId} retried successfully.");

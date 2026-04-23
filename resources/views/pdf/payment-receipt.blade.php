@@ -87,9 +87,9 @@
 
     {{-- Job Info --}}
     <div class="section">
-        <div class="section-title">Maelezo ya Kazi</div>
+        <div class="section-title">Maelezo ya Kazi / Huduma</div>
         <div class="job-box">
-            <div class="job-title">{{ $payment->job?->title ?? 'Kazi ya Winga' }}</div>
+            <div class="job-title">{{ $payment->escrowItemLabel() ?: ($payment->job?->title ?? 'Kazi ya Winga') }}</div>
             <div class="job-detail">📍 Eneo: {{ $payment->job?->location ?? '—' }}</div>
             <div class="job-detail">📊 Hali: Imekamilika</div>
             @if($payment->payment_reference)

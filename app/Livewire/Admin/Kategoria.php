@@ -2,9 +2,9 @@
 
 namespace App\Livewire\Admin;
 
-use App\Models\Category;
-use App\Models\Job;
 use App\Models\AdminAuditLog;
+use App\Models\Category;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -13,8 +13,11 @@ class Kategoria extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $filterStatus = '';
+
     public string $sortBy = 'name';
+
     public string $sortDirection = 'asc';
 
     // Category form
@@ -30,6 +33,7 @@ class Kategoria extends Component
     ];
 
     public bool $showModal = false;
+
     public bool $isEditing = false;
 
     protected $queryString = [
@@ -62,14 +66,14 @@ class Kategoria extends Component
     private function getCategoriesQuery()
     {
         return Category::query()
-            ->with(['parent', 'children', 'jobs' => fn($q) => $q->select('id', 'category_id')])
-            ->when($this->search, fn($query) => $query
+            ->with(['parent', 'children', 'jobs' => fn ($q) => $q->select('id', 'category_id')])
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('description', 'like', '%' . $this->search . '%');
+                    $q->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('description', 'like', '%'.$this->search.'%');
                 })
             )
-            ->when($this->filterStatus, fn($query) => match ($this->filterStatus) {
+            ->when($this->filterStatus, fn ($query) => match ($this->filterStatus) {
                 'active' => $query->where('is_active', true),
                 'inactive' => $query->where('is_active', false),
                 'with_jobs' => $query->whereHas('jobs'),
@@ -121,23 +125,38 @@ class Kategoria extends Component
         $this->isEditing = false;
     }
 
-    public function openModal(?Category $category = null): void
+    /**
+     * @param  Category|int|string|null  $category  Model (Livewire), id from blade (✏️), or null for new.
+     */
+    public function openModal(mixed $category = null): void
     {
-        if ($category) {
-            $this->isEditing = true;
-            $this->categoryForm = [
-                'id' => $category->id,
-                'name' => $category->name,
-                'description' => $category->description ?? '',
-                'icon' => $category->icon ?? '',
-                'color' => $category->color ?? '#0d9488',
-                'is_active' => $category->is_active,
-                'parent_id' => $category->parent_id,
-                'sort_order' => $category->sort_order ?? 0,
-            ];
+        if ($category instanceof Category) {
+            $model = $category;
+        } elseif ($category !== null && $category !== '' && is_numeric($category)) {
+            $model = Category::find((int) $category);
+            if (! $model) {
+                $this->dispatch('toast', message: __('messages.admin_categories.category_not_found'), type: 'error');
+
+                return;
+            }
         } else {
             $this->resetForm();
+            $this->showModal = true;
+
+            return;
         }
+
+        $this->isEditing = true;
+        $this->categoryForm = [
+            'id' => $model->id,
+            'name' => $model->name,
+            'description' => $model->description ?? '',
+            'icon' => $model->icon ?? '',
+            'color' => $model->color ?? '#0d9488',
+            'is_active' => $model->is_active,
+            'parent_id' => $model->parent_id,
+            'sort_order' => $model->sort_order ?? 0,
+        ];
         $this->showModal = true;
     }
 
@@ -149,8 +168,15 @@ class Kategoria extends Component
 
     public function saveCategory(): void
     {
+        $categoryId = $this->categoryForm['id'] ?? null;
+
         $this->validate([
-            'categoryForm.name' => 'required|string|max:255|unique:categories,name,' . $this->categoryForm['id'],
+            'categoryForm.name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')->ignore($categoryId),
+            ],
             'categoryForm.description' => 'nullable|string|max:1000',
             'categoryForm.icon' => 'nullable|string|max:50',
             'categoryForm.color' => 'required|string|max:7',
@@ -158,10 +184,17 @@ class Kategoria extends Component
             'categoryForm.sort_order' => 'required|integer|min:0',
         ]);
 
-        if ($this->isEditing) {
-            $category = Category::find($this->categoryForm['id']);
+        if (filled($categoryId)) {
+            $category = Category::find($categoryId);
+            if (! $category) {
+                $this->dispatch('toast', message: __('messages.admin_categories.category_not_found'), type: 'error');
+                $this->closeModal();
+
+                return;
+            }
+
             $oldData = $category->toArray();
-            
+
             $category->update([
                 'name' => $this->categoryForm['name'],
                 'description' => $this->categoryForm['description'],
@@ -203,11 +236,13 @@ class Kategoria extends Component
     {
         if ($category->jobs()->count() > 0) {
             $this->dispatch('toast', message: 'Cannot delete category with associated jobs', type: 'error');
+
             return;
         }
 
         if ($category->children()->count() > 0) {
             $this->dispatch('toast', message: 'Cannot delete category with subcategories', type: 'error');
+
             return;
         }
 
@@ -221,10 +256,10 @@ class Kategoria extends Component
 
     public function toggleCategoryStatus(Category $category): void
     {
-        $category->update(['is_active' => !$category->is_active]);
-        
+        $category->update(['is_active' => ! $category->is_active]);
+
         $this->logAdminAction('toggle_category_status', $category, [
-            'old_status' => !$category->is_active,
+            'old_status' => ! $category->is_active,
             'new_status' => $category->is_active,
         ]);
 
@@ -259,9 +294,9 @@ class Kategoria extends Component
     public function exportCategories(): void
     {
         $categories = Category::with(['parent', 'jobs'])->get();
-        
+
         $csv = "ID,Name,Description,Parent,Color,Icon,Active,Jobs Count,Created At\n";
-        
+
         foreach ($categories as $category) {
             $csv .= sprintf(
                 "%s,%s,%s,%s,%s,%s,%s,%s,%s\n",

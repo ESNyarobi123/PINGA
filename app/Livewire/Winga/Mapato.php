@@ -25,7 +25,7 @@ class Mapato extends Component
         $payment = Payment::where('id', $paymentId)
             ->where('worker_id', $user->id)
             ->where('status', 'released')
-            ->with(['job', 'employer'])
+            ->with(['job', 'employer', 'serviceRequest.service'])
             ->firstOrFail();
 
         $pdf = Pdf::loadView('pdf.payment-receipt', [
@@ -65,7 +65,7 @@ class Mapato extends Component
             ->whereMonth('created_at', now()->month)
             ->sum('amount');
         $payments = Payment::where('worker_id', $user->id)->where('status', 'released')
-            ->with(['job'])
+            ->with(['job', 'serviceRequest.service'])
             ->latest('escrow_released_at')
             ->limit(5)
             ->get();

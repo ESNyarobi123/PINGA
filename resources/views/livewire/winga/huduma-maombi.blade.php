@@ -9,6 +9,8 @@
                 <option value="all">{{ __('messages.huduma_maombi.filter_all') }} ({{ $counts['all'] }})</option>
                 <option value="pending">{{ __('messages.huduma_maombi.filter_pending') }} ({{ $counts['pending'] }})</option>
                 <option value="accepted">{{ __('messages.huduma_maombi.filter_accepted') }} ({{ $counts['accepted'] }})</option>
+                <option value="in_progress">{{ __('messages.huduma_maombi.filter_in_progress') }} ({{ $counts['in_progress'] }})</option>
+                <option value="completed">{{ __('messages.huduma_maombi.filter_completed') }} ({{ $counts['completed'] }})</option>
                 <option value="declined">{{ __('messages.huduma_maombi.filter_declined') }} ({{ $counts['declined'] }})</option>
             </flux:select>
         </div>
@@ -35,9 +37,18 @@
                             <p class="text-sm text-zinc-600 dark:text-zinc-300 mt-3 whitespace-pre-line border-s-2 border-zinc-200 dark:border-zinc-700 ps-3">{{ $req->message }}</p>
                         @endif
                         <p class="text-xs text-zinc-400 mt-2">{{ $req->created_at->diffForHumans() }}</p>
+                        @if($req->status === 'accepted' && ! $req->payment)
+                            <p class="text-xs text-amber-800 dark:text-amber-200 mt-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">{{ __('messages.huduma_maombi.awaiting_client_payment') }}</p>
+                        @endif
                     </div>
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <flux:badge :color="$req->status === 'pending' ? 'amber' : ($req->status === 'accepted' ? 'green' : 'zinc')">{{ $req->status }}</flux:badge>
+                        <flux:badge :color="match ($req->status) {
+                            'pending' => 'amber',
+                            'accepted' => 'green',
+                            'in_progress' => 'blue',
+                            'completed' => 'zinc',
+                            default => 'zinc',
+                        }">{{ $req->status }}</flux:badge>
                         @if($req->status === 'pending')
                             <flux:button size="sm" variant="primary" wire:click="accept({{ $req->id }})" wire:loading.attr="disabled">{{ __('messages.huduma_maombi.accept') }}</flux:button>
                             <flux:button size="sm" variant="ghost" wire:click="decline({{ $req->id }})" wire:loading.attr="disabled">{{ __('messages.huduma_maombi.decline') }}</flux:button>

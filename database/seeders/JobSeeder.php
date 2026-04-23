@@ -7,6 +7,7 @@ use App\Models\Job;
 use App\Models\Skill;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class JobSeeder extends Seeder
 {
@@ -18,17 +19,21 @@ class JobSeeder extends Seeder
             ->get();
 
         if ($employers->isEmpty()) {
-            $employers = collect([
-                User::factory()->create([
-                    'name' => 'Juma Hassan',
-                    'email' => 'juma@example.com',
-                    'phone' => '+255712345678',
+            // Dedicated seed user (not juma@example.com — that is the mteja in DatabaseSeeder)
+            $fallbackEmployer = User::updateOrCreate(
+                ['email' => 'seed-muajili@example.com'],
+                [
+                    'name' => 'Seed Muajili',
+                    'email_verified_at' => now(),
+                    'password' => Hash::make('password'),
+                    'phone' => '+255712345679',
                     'location' => 'Dar es Salaam',
                     'onboarding_completed' => true,
-                    'role' => 'muajili',
-                ]),
-            ]);
-            $employers->first()->assignRole('muajili');
+                    'role' => 'mteja',
+                ]
+            );
+            $fallbackEmployer->syncRoles(['muajili']);
+            $employers = collect([$fallbackEmployer]);
         }
 
         $categories = Category::where('is_active', true)->get()->keyBy('slug');

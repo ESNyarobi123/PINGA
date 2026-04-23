@@ -22,7 +22,7 @@ class HudumaMaombi extends Component
     public function mount(): void
     {
         $f = request()->query('filter');
-        if (is_string($f) && in_array($f, ['all', 'pending', 'accepted', 'declined'], true)) {
+        if (is_string($f) && in_array($f, ['all', 'pending', 'accepted', 'declined', 'in_progress', 'completed'], true)) {
             $this->filter = $f;
         }
     }
@@ -45,8 +45,8 @@ class HudumaMaombi extends Component
             ]),
             icon: 'check-circle',
             color: 'green',
-            action_url: route('messages'),
-            action_label: __('messages.huduma_maombi.notify_action_messages'),
+            action_url: route('mteja.huduma-malipo'),
+            action_label: __('messages.huduma_maombi.notify_action_pay'),
         ));
 
         $this->dispatch('toast', message: __('messages.huduma_maombi.toast_accepted'), type: 'success');
@@ -89,7 +89,7 @@ class HudumaMaombi extends Component
      */
     private function requestListWith(): array
     {
-        $with = ['service.category', 'client:id,name,avatar'];
+        $with = ['service.category', 'client:id,name,avatar', 'payment'];
         if (ServicePackageSchema::hasPackagesTable()) {
             $with[] = 'package';
         }
@@ -102,7 +102,7 @@ class HudumaMaombi extends Component
      */
     private function requestDetailWith(): array
     {
-        $with = ['service', 'client'];
+        $with = ['service', 'client', 'payment'];
         if (ServicePackageSchema::hasPackagesTable()) {
             $with[] = 'package';
         }
@@ -131,6 +131,8 @@ class HudumaMaombi extends Component
             'pending' => $this->baseQuery()->where('status', 'pending')->count(),
             'accepted' => $this->baseQuery()->where('status', 'accepted')->count(),
             'declined' => $this->baseQuery()->where('status', 'declined')->count(),
+            'in_progress' => $this->baseQuery()->where('status', 'in_progress')->count(),
+            'completed' => $this->baseQuery()->where('status', 'completed')->count(),
         ];
 
         return view('livewire.winga.huduma-maombi', [

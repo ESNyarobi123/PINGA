@@ -3,12 +3,12 @@
 namespace App\Livewire\Winga;
 
 use App\Models\Job;
+use App\Models\ServiceRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\WingaNotification;
-use App\Services\SnippePayoutService;
+use App\Support\ServicePackageSchema;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
 class WekaCode extends Component
@@ -23,30 +23,83 @@ class WekaCode extends Component
 
     public ?Job $job = null;
 
-    public array $myActiveJobs = [];
+    public ?int $serviceRequestId = null;
+
+    public ?ServiceRequest $serviceRequest = null;
 
     public int $failedAttempts = 0;
 
-    public function mount(): void
+    /**
+     * @return array{myActiveJobs: array, myActiveServiceRequests: array, awaitingPaymentServiceRequests: array}
+     */
+    private function wekaCodeListsForWorker(int $workerId): array
     {
-        $workerId = auth()->id();
-        $this->myActiveJobs = Job::where('hired_worker_id', $workerId)
+        $myActiveJobs = Job::where('hired_worker_id', $workerId)
             ->where('status', 'in_progress')
             ->with('employer:id,name')
             ->get(['id', 'title', 'employer_id'])
             ->toArray();
+
+        $srWith = ['client:id,name', 'service:id,title'];
+        if (ServicePackageSchema::hasPackagesTable()) {
+            $srWith[] = 'package:id,title';
+        }
+
+        $myActiveServiceRequests = ServiceRequest::query()
+            ->where('status', 'in_progress')
+            ->whereHas('service', fn ($q) => $q->where('user_id', $workerId))
+            ->whereHas('payment', fn ($q) => $q->where('status', 'escrowed'))
+            ->with($srWith)
+            ->get(['id', 'service_id', 'client_id', 'service_package_id'])
+            ->toArray();
+
+        $awaitingPaymentServiceRequests = ServiceRequest::query()
+            ->where('status', 'accepted')
+            ->whereHas('service', fn ($q) => $q->where('user_id', $workerId))
+            ->whereDoesntHave('payment')
+            ->with($srWith)
+            ->get(['id', 'service_id', 'client_id', 'service_package_id'])
+            ->toArray();
+
+        return [
+            'myActiveJobs' => $myActiveJobs,
+            'myActiveServiceRequests' => $myActiveServiceRequests,
+            'awaitingPaymentServiceRequests' => $awaitingPaymentServiceRequests,
+        ];
     }
 
     public function selectJob(int $jobId): void
     {
-        $this->jobId        = $jobId;
-        $this->job          = Job::where('id', $jobId)
+        $this->jobId = $jobId;
+        $this->job = Job::where('id', $jobId)
             ->where('hired_worker_id', auth()->id())
             ->with(['employer:id,name,phone', 'payment'])
             ->first();
-        $this->error        = null;
-        $this->code         = '';
-        $this->verified     = false;
+        $this->serviceRequestId = null;
+        $this->serviceRequest = null;
+        $this->error = null;
+        $this->code = '';
+        $this->verified = false;
+        $this->failedAttempts = 0;
+    }
+
+    public function selectServiceRequest(int $serviceRequestId): void
+    {
+        $workerId = auth()->id();
+        $this->serviceRequest = ServiceRequest::query()
+            ->where('id', $serviceRequestId)
+            ->where('status', 'in_progress')
+            ->whereHas('service', fn ($q) => $q->where('user_id', $workerId))
+            ->with(['client:id,name,phone', 'payment', 'service:id,title'])
+            ->when(ServicePackageSchema::hasPackagesTable(), fn ($q) => $q->with('package:id,title'))
+            ->first();
+
+        $this->serviceRequestId = $this->serviceRequest?->id;
+        $this->jobId = null;
+        $this->job = null;
+        $this->error = null;
+        $this->code = '';
+        $this->verified = false;
         $this->failedAttempts = 0;
     }
 
@@ -54,40 +107,53 @@ class WekaCode extends Component
     {
         $this->validate(['code' => 'required|string|size:6']);
 
-        if (! $this->job) {
-            $this->error = 'Tafadhali chagua kazi kwanza.';
+        if ($this->job) {
+            $this->verifyJob();
+
             return;
         }
 
-        // 3-hour hold check
-        if ($this->job->isOnCodeHold()) {
-            $releaseIn   = now()->diffForHumans($this->job->code_hold_until, ['parts' => 2]);
-            $this->error = "Muajili ameweka kazi hii kwenye hali ya tathmini. Code itaweza kutumika baada ya {$releaseIn}. Wasiliana na muajili wako.";
+        if ($this->serviceRequest) {
+            $this->verifyServiceRequest();
+
             return;
         }
 
-        if (! $this->job->verifyCompletionCode($this->code)) {
+        $this->error = __('messages.weka_code.select_first');
+    }
+
+    private function verifyJob(): void
+    {
+        $job = $this->job;
+        if (! $job) {
+            return;
+        }
+
+        if ($job->isOnCodeHold()) {
+            $releaseIn = now()->diffForHumans($job->code_hold_until, ['parts' => 2]);
+            $this->error = __('messages.weka_code.hold_error', ['when' => $releaseIn]);
+
+            return;
+        }
+
+        if (! $job->verifyCompletionCode($this->code)) {
             $this->failedAttempts++;
-            $this->code  = '';
-            $this->error = 'Code si sahihi. Mwambie muajili wako akuambie code yake.';
-
-            // 3 failed attempts → alert admin as suspicious
+            $this->code = '';
+            $this->error = __('messages.weka_code.wrong_code');
             if ($this->failedAttempts >= 3) {
-                $this->alertAdminSuspiciousActivity();
-                $this->error .= ' Majaribio mengi yamefanywa. Admin amearifiwa.';
+                $this->alertAdminSuspiciousActivityJob($job);
+                $this->error .= ' '.__('messages.weka_code.admin_notified');
             }
 
             return;
         }
 
-        // === CODE CORRECT: run payment release in DB transaction ===
-        DB::transaction(function () {
-            $worker  = auth()->user();
-            $payment = $this->job->payment;
+        DB::transaction(function () use ($job) {
+            $worker = auth()->user();
+            $payment = $job->payment;
 
-            // 1. Complete the job
-            $this->job->update([
-                'status'       => 'completed',
+            $job->update([
+                'status' => 'completed',
                 'code_used_at' => now(),
             ]);
 
@@ -97,75 +163,198 @@ class WekaCode extends Component
 
             $workerAmount = (float) $payment->worker_amount;
 
-            // 2. Credit worker's wallet immediately
             $worker->increment('wallet_balance', $workerAmount);
 
-            // 3. Mark payment as released
             $payment->update([
-                'status'             => 'released',
+                'status' => 'released',
                 'escrow_released_at' => now(),
-                'payout_status'      => 'completed',
+                'payout_status' => 'completed',
             ]);
 
-            // 4. Create completed transaction for worker
             Transaction::create([
-                'user_id'       => $worker->id,
-                'payment_id'    => $payment->id,
-                'type'          => 'credit',
-                'amount'        => $workerAmount,
-                'description'   => 'Malipo ya kazi: ' . $this->job->title,
+                'user_id' => $worker->id,
+                'payment_id' => $payment->id,
+                'type' => 'credit',
+                'amount' => $workerAmount,
+                'description' => 'Malipo ya kazi: '.$job->title,
                 'balance_after' => $worker->fresh()->wallet_balance,
-                'status'        => 'completed',
+                'status' => 'completed',
             ]);
         });
 
-        // 5. Notify employer
-        if ($this->job->employer) {
-            $this->job->employer->notify(new WingaNotification(
-                title: '✅ Kazi Imekamilika!',
-                message: auth()->user()->name . ' ameweka code — kazi "' . $this->job->title . '" imekamilika. Malipo yametumwa kwa Winga.',
+        $job->refresh();
+
+        if ($job->employer) {
+            $job->employer->notify(new WingaNotification(
+                title: __('messages.weka_code.notify_employer_done_title'),
+                message: __('messages.weka_code.notify_employer_done_job', [
+                    'worker' => auth()->user()->name,
+                    'title' => $job->title,
+                ]),
                 icon: 'check-circle',
                 color: 'green',
                 action_url: route('mteja.kazi-zangu'),
-                action_label: 'Angalia Kazi',
+                action_label: __('messages.weka_code.notify_employer_action'),
             ));
         }
 
-        // 6. Notify worker
-        $payment = $this->job->fresh()->payment;
+        $payment = $job->fresh()->payment;
         auth()->user()->notify(new WingaNotification(
-            title: '💸 Malipo Yanakuja!',
-            message: 'Code imethibitishwa! TZS ' . number_format($payment->worker_amount ?? 0) . ' yanakuja kwenye simu yako hivi karibuni.',
+            title: __('messages.weka_code.notify_worker_paid_title'),
+            message: __('messages.weka_code.notify_worker_paid_body', [
+                'amount' => number_format($payment->worker_amount ?? 0),
+            ]),
             icon: 'banknotes',
             color: 'green',
             action_url: route('winga.mapato'),
-            action_label: 'Angalia Mapato',
+            action_label: __('messages.weka_code.notify_worker_action'),
         ));
 
-        $this->error    = null;
-        $this->verified = true;
-        $this->dispatch('toast', message: 'Code imethibitishwa! Pesa ya TZS ' . number_format($payment->worker_amount ?? 0) . ' inakuja kwenye simu yako.', type: 'success');
+        $this->finishVerifySuccess($payment->worker_amount ?? 0);
     }
 
-    protected function alertAdminSuspiciousActivity(): void
+    private function verifyServiceRequest(): void
+    {
+        $req = $this->serviceRequest;
+        if (! $req) {
+            return;
+        }
+
+        if ($req->isOnCodeHold()) {
+            $releaseIn = now()->diffForHumans($req->code_hold_until, ['parts' => 2]);
+            $this->error = __('messages.weka_code.hold_error', ['when' => $releaseIn]);
+
+            return;
+        }
+
+        if (! $req->verifyCompletionCode($this->code)) {
+            $this->failedAttempts++;
+            $this->code = '';
+            $this->error = __('messages.weka_code.wrong_code');
+            if ($this->failedAttempts >= 3) {
+                $this->alertAdminSuspiciousActivityServiceRequest($req);
+                $this->error .= ' '.__('messages.weka_code.admin_notified');
+            }
+
+            return;
+        }
+
+        DB::transaction(function () use ($req) {
+            $worker = auth()->user();
+            $payment = $req->payment;
+
+            $req->update([
+                'status' => 'completed',
+                'code_used_at' => now(),
+            ]);
+
+            if (! $payment || $payment->status !== 'escrowed') {
+                return;
+            }
+
+            $workerAmount = (float) $payment->worker_amount;
+
+            $worker->increment('wallet_balance', $workerAmount);
+
+            $payment->update([
+                'status' => 'released',
+                'escrow_released_at' => now(),
+                'payout_status' => 'completed',
+            ]);
+
+            $label = $req->service->title ?? 'huduma';
+
+            Transaction::create([
+                'user_id' => $worker->id,
+                'payment_id' => $payment->id,
+                'type' => 'credit',
+                'amount' => $workerAmount,
+                'description' => 'Malipo ya huduma: '.$label,
+                'balance_after' => $worker->fresh()->wallet_balance,
+                'status' => 'completed',
+            ]);
+        });
+
+        $req->refresh();
+
+        if ($req->client) {
+            $req->client->notify(new WingaNotification(
+                title: __('messages.weka_code.notify_client_done_title'),
+                message: __('messages.weka_code.notify_client_done_service', [
+                    'worker' => auth()->user()->name,
+                    'title' => $req->service->title ?? '',
+                ]),
+                icon: 'check-circle',
+                color: 'green',
+                action_url: route('mteja.huduma-malipo'),
+                action_label: __('messages.weka_code.notify_client_action'),
+            ));
+        }
+
+        $payment = $req->fresh()->payment;
+        auth()->user()->notify(new WingaNotification(
+            title: __('messages.weka_code.notify_worker_paid_title'),
+            message: __('messages.weka_code.notify_worker_paid_body', [
+                'amount' => number_format($payment->worker_amount ?? 0),
+            ]),
+            icon: 'banknotes',
+            color: 'green',
+            action_url: route('winga.mapato'),
+            action_label: __('messages.weka_code.notify_worker_action'),
+        ));
+
+        $this->finishVerifySuccess($payment->worker_amount ?? 0);
+    }
+
+    private function finishVerifySuccess(float $workerAmount): void
+    {
+        $this->error = null;
+        $this->verified = true;
+        $this->dispatch('toast', message: __('messages.weka_code.toast_success', ['amount' => number_format($workerAmount)]), type: 'success');
+    }
+
+    protected function alertAdminSuspiciousActivityJob(Job $job): void
     {
         $admins = User::where('role', 'admin')->get();
         foreach ($admins as $admin) {
             $admin->notify(new WingaNotification(
-                title: '⚠️ Majaribio ya Kutata ya Code',
-                message: auth()->user()->name . ' amejaribu code vibaya mara 3+ kwenye kazi "' . ($this->job->title ?? '') . '".',
+                title: __('messages.weka_code.admin_alert_title'),
+                message: __('messages.weka_code.admin_alert_job', [
+                    'worker' => auth()->user()->name,
+                    'title' => $job->title ?? '',
+                ]),
                 icon: 'exclamation-triangle',
                 color: 'amber',
                 action_url: route('admin.kazi'),
-                action_label: 'Angalia',
+                action_label: __('messages.weka_code.admin_alert_action'),
+            ));
+        }
+    }
+
+    protected function alertAdminSuspiciousActivityServiceRequest(ServiceRequest $req): void
+    {
+        $admins = User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new WingaNotification(
+                title: __('messages.weka_code.admin_alert_title'),
+                message: __('messages.weka_code.admin_alert_service', [
+                    'worker' => auth()->user()->name,
+                    'title' => $req->service->title ?? '',
+                ]),
+                icon: 'exclamation-triangle',
+                color: 'amber',
+                action_url: route('admin.kazi'),
+                action_label: __('messages.weka_code.admin_alert_action'),
             ));
         }
     }
 
     public function render()
     {
-        return view('livewire.winga.weka-code')
+        $lists = $this->wekaCodeListsForWorker((int) auth()->id());
+
+        return view('livewire.winga.weka-code', $lists)
             ->layout('layouts.winga')
-            ->title('Weka Code ya Kukamilisha Kazi');
+            ->title(__('messages.weka_code.title'));
     }
 }

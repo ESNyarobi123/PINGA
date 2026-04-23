@@ -73,12 +73,12 @@
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
         <div class="border-b border-zinc-200 dark:border-zinc-800">
             <nav class="flex space-x-8 px-6" aria-label="Tabs">
-                <button wire:click="$set('activeTab', 'conversations')"
+                <button type="button" wire:click="$set('activeTab', 'conversations')"
                         class="{{ $activeTab === 'conversations' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
                         whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
                     {{ __('messages.admin_comms.tab_conversations') }}
                 </button>
-                <button wire:click="$set('activeTab', 'broadcasts')"
+                <button type="button" wire:click="$set('activeTab', 'broadcasts')"
                         class="{{ $activeTab === 'broadcasts' ? 'border-winga-500 text-winga-600' : 'border-transparent text-zinc-500 hover:text-zinc-700' }} 
                         whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition">
                     {{ __('messages.admin_comms.tab_broadcasts') }}
@@ -244,61 +244,87 @@
                 {{-- Send New Broadcast --}}
                 <div class="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-6">
                     <h3 class="text-lg font-bold text-zinc-900 dark:text-white mb-4">{{ __('messages.admin_comms.send_broadcast_title') }}</h3>
-                    
+
+                    @if ($errors->any())
+                        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+                            <p class="font-semibold">{{ __('messages.admin_comms.broadcast_form_hint') }}</p>
+                            <ul class="mt-2 list-inside list-disc space-y-1">
+                                @foreach ($errors->all() as $err)
+                                    <li>{{ $err }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{{ __('messages.admin_comms.broadcast_title_label') }}</label>
-                            <input wire:model.live="broadcastTitle"
+                            <input wire:model.blur="broadcastTitle"
                                    type="text"
                                    placeholder="{{ __('messages.admin_comms.broadcast_title_placeholder') }}"
-                                   class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+                                   class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm @error('broadcastTitle') border-red-500 @else border-zinc-200 dark:border-zinc-700 @enderror">
+                            @error('broadcastTitle')
+                                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{{ __('messages.admin_comms.broadcast_message_label') }}</label>
-                            <textarea wire:model.live="broadcastMessage"
+                            <textarea wire:model.blur="broadcastMessage"
                                       placeholder="{{ __('messages.admin_comms.broadcast_message_placeholder') }}"
-                                      class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm"
+                                      class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm @error('broadcastMessage') border-red-500 @else border-zinc-200 dark:border-zinc-700 @enderror"
                                       rows="4"></textarea>
+                            @error('broadcastMessage')
+                                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{{ __('messages.admin_comms.broadcast_type_label') }}</label>
-                            <select wire:model.live="broadcastType" class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
-                                <option value="">{{ __('messages.admin_comms.select_type') }}</option>
+                            <select wire:model.live="broadcastType" class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm @error('broadcastType') border-red-500 @else border-zinc-200 dark:border-zinc-700 @enderror">
                                 <option value="announcement">📢 {{ __('messages.admin_comms.announcement') }}</option>
                                 <option value="maintenance">🔧 {{ __('messages.admin_comms.maintenance') }}</option>
                                 <option value="warning">⚠️ {{ __('messages.admin_comms.warning_type') }}</option>
                                 <option value="info">ℹ️ {{ __('messages.admin_comms.information') }}</option>
                             </select>
+                            @error('broadcastType')
+                                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{{ __('messages.admin_comms.target_audience') }}</label>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" wire:model.live="targetAudience" value="all" class="rounded">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 @error('targetAudience') rounded-lg border border-red-500 p-2 @enderror">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" wire:model.live="targetAudience" value="all" class="rounded border-zinc-300 dark:border-zinc-600">
                                     <span>{{ __('messages.admin_comms.all_users') }}</span>
                                 </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" wire:model.live="targetAudience" value="clients" class="rounded">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" wire:model.live="targetAudience" value="clients" class="rounded border-zinc-300 dark:border-zinc-600">
                                     <span>{{ __('messages.admin_comms.clients') }}</span>
                                 </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" wire:model.live="targetAudience" value="workers" class="rounded">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" wire:model.live="targetAudience" value="workers" class="rounded border-zinc-300 dark:border-zinc-600">
                                     <span>{{ __('messages.admin_comms.workers') }}</span>
                                 </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" wire:model.live="targetAudience" value="premium" class="rounded">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" wire:model.live="targetAudience" value="premium" class="rounded border-zinc-300 dark:border-zinc-600">
                                     <span>{{ __('messages.admin_comms.premium_users') }}</span>
                                 </label>
                             </div>
+                            @error('targetAudience')
+                                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                            @enderror
                         </div>
 
-                        <button wire:click="sendBroadcast"
+                        <button type="button"
+                                wire:click="sendBroadcast"
                                 wire:confirm="{{ __('messages.admin_comms.confirm_broadcast') }}"
-                                class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition">
-                            📡 {{ __('messages.admin_comms.send_broadcast') }}
+                                wire:loading.attr="disabled"
+                                wire:target="sendBroadcast"
+                                class="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg font-medium transition">
+                            <span wire:loading.remove wire:target="sendBroadcast">📡 {{ __('messages.admin_comms.send_broadcast') }}</span>
+                            <span wire:loading wire:target="sendBroadcast">{{ __('messages.admin_comms.sending_broadcast') }}</span>
                         </button>
                     </div>
                 </div>
@@ -322,22 +348,23 @@
                                     <td class="px-4 py-3">
                                         <div>
                                             <p class="font-medium text-zinc-900 dark:text-white text-sm">{{ $broadcast->title }}</p>
-                                            <p class="text-xs text-zinc-500 mt-1 line-clamp-2">{{ $broadcast->message }}</p>
+                                            <p class="text-xs text-zinc-500 mt-1 line-clamp-2">{{ $broadcast->body }}</p>
                                         </div>
                                     </td>
                                     <td class="px-4 py-3">
+                                        @php $kind = $broadcast->announcement_type ?? 'announcement'; @endphp
                                         <span class="px-2 py-1 text-xs font-bold rounded-lg
-                                            {{ $broadcast->type === 'announcement' ? 'bg-blue-100 text-blue-700' :
-                                               ($broadcast->type === 'maintenance' ? 'bg-amber-100 text-amber-700' :
-                                               ($broadcast->type === 'warning' ? 'bg-red-100 text-red-700' :
+                                            {{ $kind === 'announcement' ? 'bg-blue-100 text-blue-700' :
+                                               ($kind === 'maintenance' ? 'bg-amber-100 text-amber-700' :
+                                               ($kind === 'warning' ? 'bg-red-100 text-red-700' :
                                                'bg-zinc-100 text-zinc-700')) }}">
-                                            {{ ucfirst($broadcast->type) }}
+                                            {{ ucfirst($kind) }}
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                                        {{ json_decode($broadcast->target_audience) ? implode(', ', json_decode($broadcast->target_audience)) : '—' }}
+                                        {{ $broadcast->target_label }}
                                     </td>
-                                    <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">{{ $broadcast->sender?->name ?? 'System' }}</td>
+                                    <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">{{ $broadcast->admin?->name ?? '—' }}</td>
                                     <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
                                         {{ $broadcast->sent_at?->format('d M Y, H:i') ?? '—' }}
                                     </td>

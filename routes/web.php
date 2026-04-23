@@ -5,6 +5,11 @@ use App\Livewire\Public\TafutaKazi;
 use App\Livewire\Public\TafutaWafanyakazi;
 use Illuminate\Support\Facades\Route;
 
+// Laravel Boost only registers POST /_boost/browser-logs; prefetch/GET hits would 405 otherwise.
+if (app()->environment('local') || config('app.debug')) {
+    Route::get('/_boost/browser-logs', fn () => response()->noContent(204));
+}
+
 // ========================================
 // Public Routes
 // ========================================
@@ -33,6 +38,8 @@ Route::get('/bei', function () {
 Route::get('/wasifu', function () {
     return view('pages.wasifu');
 })->name('wasifu');
+
+Route::view('/account-suspended', 'pages.account-suspended')->name('account-suspended');
 
 // ========================================
 // Auth & OTP Routes
@@ -87,6 +94,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/maombi', \App\Livewire\Mteja\Maombi::class)->name('maombi');
         Route::get('/mawinga', \App\Livewire\Mteja\Mawinga::class)->name('mawinga');
         Route::get('/huduma', \App\Livewire\Mteja\HudumaMarketplace::class)->name('huduma');
+        Route::get('/huduma-malipo', \App\Livewire\Mteja\HudumaMalipo::class)->name('huduma-malipo');
         Route::get('/winga/{id}', \App\Livewire\Mteja\WingaProfile::class)->name('winga-profile')->whereNumber('id');
         Route::get('/wallet', \App\Livewire\Mteja\Wallet::class)->name('wallet');
         Route::get('/analytics', \App\Livewire\Mteja\Analytics::class)->name('analytics');

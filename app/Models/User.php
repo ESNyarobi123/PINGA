@@ -270,6 +270,24 @@ class User extends Authenticatable
     }
 
     /**
+     * @return array{email: string, role: string, role_label: string, reason: ?string}
+     */
+    public function suspensionAppealFlashData(): array
+    {
+        return [
+            'email' => $this->email,
+            'role' => (string) $this->role,
+            'role_label' => match ($this->role) {
+                'winga' => 'Winga',
+                'mteja' => 'Mteja',
+                'admin' => 'Msimamizi',
+                default => ucfirst((string) $this->role),
+            },
+            'reason' => $this->suspended_reason,
+        ];
+    }
+
+    /**
      * Get user's account status
      */
     public function getAccountStatusAttribute(): string

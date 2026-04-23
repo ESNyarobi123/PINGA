@@ -316,10 +316,10 @@ class KaziDetail extends Component
 
     public function resetCompletionCode(): void
     {
-        $newCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $newCode = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
 
         $this->job->update([
-            'completion_code' => bcrypt($newCode),
+            'completion_code' => $newCode,
             'code_generated_at' => now(),
             'code_hold_until' => null,
         ]);
@@ -391,7 +391,7 @@ class KaziDetail extends Component
                 'type' => 'application',
                 'icon' => '📋',
                 'title' => 'Maombi yamepokelewa',
-                'description' => "Na {$application->worker->name}",
+                'description' => 'Na '.($application->worker?->name ?? 'Unknown'),
                 'time' => $application->created_at->format('d M Y, H:i'),
                 'color' => 'purple',
             ];

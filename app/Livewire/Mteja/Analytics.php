@@ -11,7 +11,7 @@ class Analytics extends Component
 {
     public bool $ready = false;
 
-    public string $period = '30'; // 7, 30, 90 days
+    public string $period = '30'; // 7, 30, 90, all
 
     public array $stats = [];
 
@@ -36,21 +36,31 @@ class Analytics extends Component
     public function loadData(): void
     {
         $user = auth()->user();
-        $days = (int) $this->period;
-        $since = now()->subDays($days);
+        $period = in_array($this->period, ['7', '30', '90', 'all'], true) ? $this->period : '30';
+        $days = $period === 'all' ? null : (int) $period;
+        $since = $days === null ? null : now()->subDays($days);
 
         // Core stats
-        $totalJobs = Job::where('employer_id', $user->id)->count();
-        $activeJobs = Job::where('employer_id', $user->id)->where('status', 'open')->count();
-        $completedJobs = Job::where('employer_id', $user->id)->where('status', 'completed')->count();
-        $totalApplications = Application::whereHas('job', fn ($q) => $q->where('employer_id', $user->id))->count();
-        $pendingApplications = Application::whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
-            ->where('status', 'pending')->count();
+        $jobsQuery = Job::query()
+            ->where('employer_id', $user->id)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since));
 
-        $totalSpent = Payment::where('employer_id', $user->id)
-            ->whereIn('status', ['released', 'escrowed'])->sum('amount');
-        $platformFees = Payment::where('employer_id', $user->id)
-            ->whereIn('status', ['released'])->sum('platform_fee');
+        $applicationsQuery = Application::query()
+            ->whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since));
+
+        $paymentsQuery = Payment::query()
+            ->where('employer_id', $user->id)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since));
+
+        $totalJobs = (clone $jobsQuery)->count();
+        $activeJobs = (clone $jobsQuery)->where('status', 'open')->count();
+        $completedJobs = (clone $jobsQuery)->where('status', 'completed')->count();
+        $totalApplications = (clone $applicationsQuery)->count();
+        $pendingApplications = (clone $applicationsQuery)->where('status', 'pending')->count();
+
+        $totalSpent = (clone $paymentsQuery)->whereIn('status', ['released', 'escrowed'])->sum('amount');
+        $platformFees = (clone $paymentsQuery)->whereIn('status', ['released'])->sum('platform_fee');
         $walletBalance = (float) ($user->wallet_balance ?? 0);
 
         $this->stats = [
@@ -66,20 +76,47 @@ class Analytics extends Component
             'avg_per_job' => $completedJobs > 0 ? round($totalSpent / $completedJobs) : 0,
         ];
 
-        // Applications trend per day
+        // Applications trend
         $this->applicationsTrend = [];
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $date = now()->subDays($i)->toDateString();
-            $count = Application::whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
-                ->whereDate('created_at', $date)->count();
-            $this->applicationsTrend[] = [
-                'date' => now()->subDays($i)->format('d M'),
-                'count' => $count,
-            ];
+        if ($days !== null) {
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = now()->subDays($i)->toDateString();
+                $count = Application::query()
+                    ->whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
+                    ->whereDate('created_at', $date)
+                    ->count();
+
+                $this->applicationsTrend[] = [
+                    'date' => now()->subDays($i)->format('d M'),
+                    'count' => $count,
+                ];
+            }
+        } else {
+            $firstApplicationAt = Application::query()
+                ->whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
+                ->min('created_at');
+
+            $start = $firstApplicationAt ? now()->parse($firstApplicationAt)->startOfMonth() : now()->startOfMonth();
+            $end = now()->startOfMonth();
+            $months = min(max($start->diffInMonths($end) + 1, 1), 24);
+
+            for ($i = $months - 1; $i >= 0; $i--) {
+                $monthStart = $end->copy()->subMonths($i);
+                $monthEnd = $monthStart->copy()->endOfMonth();
+
+                $count = Application::query()
+                    ->whereHas('job', fn ($q) => $q->where('employer_id', $user->id))
+                    ->whereBetween('created_at', [$monthStart, $monthEnd])
+                    ->count();
+
+                $this->applicationsTrend[] = [
+                    'date' => $monthStart->format('M Y'),
+                    'count' => $count,
+                ];
+            }
         }
 
         // Budget breakdown
-        $jobIds = Job::where('employer_id', $user->id)->pluck('id');
         $budgetRanges = [
             'Chini 50K' => [0, 50000],
             '50K-200K' => [50000, 200000],
@@ -88,7 +125,9 @@ class Analytics extends Component
         ];
         $this->budgetData = [];
         foreach ($budgetRanges as $label => [$min, $max]) {
-            $count = Job::where('employer_id', $user->id)
+            $count = Job::query()
+                ->where('employer_id', $user->id)
+                ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
                 ->where('budget_min', '>=', $min)
                 ->where('budget_min', '<', $max)
                 ->count();
@@ -99,7 +138,11 @@ class Analytics extends Component
         $statuses = ['open', 'in_progress', 'completed', 'cancelled', 'disputed'];
         $this->jobStatusData = [];
         foreach ($statuses as $status) {
-            $count = Job::where('employer_id', $user->id)->where('status', $status)->count();
+            $count = Job::query()
+                ->where('employer_id', $user->id)
+                ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+                ->where('status', $status)
+                ->count();
             $this->jobStatusData[] = ['status' => $status, 'count' => $count];
         }
 

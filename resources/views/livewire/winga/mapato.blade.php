@@ -140,7 +140,7 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <p class="font-medium text-zinc-900 dark:text-white">{{ $payment->job->title }}</p>
+                                    <p class="font-medium text-zinc-900 dark:text-white">{{ $payment->escrowItemLabel() ?: '—' }}</p>
                                     <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $payment->escrow_released_at->diffForHumans() }}</p>
                                 </div>
                             </div>

@@ -115,6 +115,15 @@
         </flux:main>
 
         @fluxScripts
+        <script>
+            document.addEventListener('livewire:init', () => {
+                Livewire.on('toast', (payload) => {
+                    const data = Array.isArray(payload) ? payload[0] : payload;
+                    const message = data?.message ?? 'OK';
+                    window.alert(message);
+                });
+            });
+        </script>
         @stack('scripts')
     </body>
 </html>

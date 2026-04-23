@@ -40,6 +40,18 @@ class Wallet extends Component
 
         $user = auth()->user();
         $this->phone = $user->phone ?? '';
+
+        $prefillAmount = session()->pull('deposit_amount');
+        $prefillReason = session()->pull('deposit_reason');
+        if ($prefillAmount !== null && is_numeric($prefillAmount) && (float) $prefillAmount > 0) {
+            $this->amount = (float) $prefillAmount;
+            $this->showDepositModal = true;
+            $this->depositStep = 1;
+            $this->paymentMethod = '';
+            if (is_string($prefillReason) && $prefillReason !== '') {
+                session()->flash('success_message', $prefillReason.' — '.__('messages.wallet.deposit_prefill_hint'));
+            }
+        }
     }
 
     public function openDepositModal()
@@ -162,12 +174,12 @@ class Wallet extends Component
         $minAmount = SettingsService::minWithdrawalAmount();
 
         $this->validate([
-            'withdrawAmount' => ['required', 'numeric', 'min:' . $minAmount],
+            'withdrawAmount' => ['required', 'numeric', 'min:'.$minAmount],
             'withdrawPhone' => ['required', 'string', 'min:9'],
             'withdrawNetwork' => ['required', 'string', 'in:vodacom,tigopesa,airtel,halotel'],
         ], [
             'withdrawAmount.required' => 'Tafadhali weka kiasi cha kutoa.',
-            'withdrawAmount.min' => 'Kiwango cha chini ni TZS ' . number_format($minAmount),
+            'withdrawAmount.min' => 'Kiwango cha chini ni TZS '.number_format($minAmount),
             'withdrawPhone.required' => 'Namba ya simu inahitajika.',
         ]);
 
@@ -177,7 +189,8 @@ class Wallet extends Component
         $totalDeduction = $this->withdrawAmount + $chargeAmount;
 
         if ($user->wallet_balance < $totalDeduction) {
-            $this->addError('withdrawAmount', 'Salio lako halitosha. Unahitaji TZS ' . number_format($totalDeduction) . ' (pamoja na ada ya ' . $chargePercent . '%)');
+            $this->addError('withdrawAmount', 'Salio lako halitosha. Unahitaji TZS '.number_format($totalDeduction).' (pamoja na ada ya '.$chargePercent.'%)');
+
             return;
         }
 
@@ -195,7 +208,8 @@ class Wallet extends Component
         }
 
         if ($availableBalance < $totalDeduction) {
-            $this->addError('withdrawAmount', 'Salio lako linaloweza kutolewa ni TZS ' . number_format($availableBalance) . ' (baada ya kuzingatia malipo yaliyoshikiliwa).');
+            $this->addError('withdrawAmount', 'Salio lako linaloweza kutolewa ni TZS '.number_format($availableBalance).' (baada ya kuzingatia malipo yaliyoshikiliwa).');
+
             return;
         }
 
@@ -221,14 +235,14 @@ class Wallet extends Component
             'user_id' => $user->id,
             'type' => 'debit',
             'amount' => $totalDeduction,
-            'description' => 'Ombi la kutoa pesa: TZS ' . number_format($this->withdrawAmount) . ' + ada TZS ' . number_format($chargeAmount) . ' (' . $chargePercent . '%)',
+            'description' => 'Ombi la kutoa pesa: TZS '.number_format($this->withdrawAmount).' + ada TZS '.number_format($chargeAmount).' ('.$chargePercent.'%)',
             'balance_after' => $user->fresh()->wallet_balance,
-            'reference' => 'WD-' . $withdrawal->id,
+            'reference' => 'WD-'.$withdrawal->id,
             'status' => 'completed',
         ]);
 
         $this->closeWithdrawModal();
-        $this->dispatch('toast', message: 'Ombi la kutoa TZS ' . number_format($this->withdrawAmount) . ' limetumwa! Ada: TZS ' . number_format($chargeAmount) . ' (' . $chargePercent . '%).', type: 'success');
+        $this->dispatch('toast', message: 'Ombi la kutoa TZS '.number_format($this->withdrawAmount).' limetumwa! Ada: TZS '.number_format($chargeAmount).' ('.$chargePercent.'%).', type: 'success');
     }
 
     public function render()

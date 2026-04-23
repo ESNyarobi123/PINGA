@@ -1,6 +1,9 @@
 <?php
 
+use App\Exceptions\SubscriptionPurchaseNotAllowedException;
 use App\Livewire\Admin\Kazi as AdminKazi;
+use App\Livewire\Mteja\Codes;
+use App\Livewire\Mteja\HudumaMalipo;
 use App\Livewire\Mteja\KaziZangu;
 use App\Livewire\Mteja\PostKazi;
 use App\Livewire\Mteja\WingaProfile;
@@ -10,6 +13,7 @@ use App\Livewire\Winga\TombaOmbi;
 use App\Livewire\Winga\WekaCode;
 use App\Models\Category;
 use App\Models\Job;
+use App\Models\Payment;
 use App\Models\Service;
 use App\Models\ServicePackage;
 use App\Models\ServiceRequest;
@@ -203,22 +207,22 @@ test('Job isOnCodeHold returns false when hold has expired', function () {
 test('subscription plans are seeded correctly', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder'])->assertSuccessful();
 
-    $msingi = SubscriptionPlan::where('slug', 'msingi')->first();
-    $kawaida = SubscriptionPlan::where('slug', 'kawaida')->first();
-    $bora = SubscriptionPlan::where('slug', 'bora')->first();
+    $complex = SubscriptionPlan::where('slug', 'winga-complex')->first();
+    $karume = SubscriptionPlan::where('slug', 'winga-karume')->first();
+    $kkoo = SubscriptionPlan::where('slug', 'winga-kkoo')->first();
 
-    expect($msingi)->not->toBeNull();
-    expect($kawaida)->not->toBeNull();
-    expect($bora)->not->toBeNull();
+    expect($complex)->not->toBeNull();
+    expect($karume)->not->toBeNull();
+    expect($kkoo)->not->toBeNull();
 
-    expect($msingi->price)->toBe(5000);
-    expect($msingi->duration_days)->toBe(30);
-    expect($kawaida->price)->toBe(12000);
-    expect($kawaida->duration_days)->toBe(90);
-    expect($bora->price)->toBe(20000);
-    expect($bora->duration_days)->toBe(180);
-    expect((bool) $bora->is_recommended)->toBeFalse();
-    expect((bool) $kawaida->is_recommended)->toBeTrue();
+    expect($complex->price)->toBe(5000);
+    expect($complex->duration_days)->toBe(30);
+    expect($karume->price)->toBe(15000);
+    expect($karume->duration_days)->toBe(60);
+    expect($kkoo->price)->toBe(35000);
+    expect($kkoo->duration_days)->toBe(90);
+    expect((bool) $kkoo->is_recommended)->toBeFalse();
+    expect((bool) $karume->is_recommended)->toBeTrue();
 });
 
 // ============================================================
@@ -227,13 +231,13 @@ test('subscription plans are seeded correctly', function () {
 test('worker can activate subscription via wallet', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
     $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
-    $plan = SubscriptionPlan::where('slug', 'msingi')->firstOrFail();
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
 
     $service = app(SubscriptionService::class);
     $sub = $service->payFromWallet($worker, $plan);
 
     expect($sub->status)->toBe('active');
-    expect($sub->plan_slug)->toBe('msingi');
+    expect($sub->plan_slug)->toBe('winga-complex');
     expect($sub->payment_status)->toBe('completed');
     expect($sub->expires_at->isFuture())->toBeTrue();
 
@@ -241,10 +245,72 @@ test('worker can activate subscription via wallet', function () {
     expect((float) $worker->fresh()->wallet_balance)->toBe(15000.0);
 });
 
+test('worker cannot pay the same plan again before the renewal window', function () {
+    $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
+    $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
+
+    $service = app(SubscriptionService::class);
+    $service->payFromWallet($worker, $plan);
+
+    $balanceAfterFirst = (float) $worker->fresh()->wallet_balance;
+
+    expect(fn () => $service->payFromWallet($worker->fresh(), $plan))
+        ->toThrow(SubscriptionPurchaseNotAllowedException::class);
+
+    expect((float) $worker->fresh()->wallet_balance)->toBe($balanceAfterFirst);
+});
+
+test('worker cannot switch to a different plan while the current subscription is active', function () {
+    $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
+    $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 50000]);
+    $complex = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
+    $karume = SubscriptionPlan::where('slug', 'winga-karume')->firstOrFail();
+
+    $service = app(SubscriptionService::class);
+    $service->payFromWallet($worker, $complex);
+
+    $balanceAfterFirst = (float) $worker->fresh()->wallet_balance;
+
+    expect(fn () => $service->payFromWallet($worker->fresh(), $karume))
+        ->toThrow(SubscriptionPurchaseNotAllowedException::class);
+
+    expect((float) $worker->fresh()->wallet_balance)->toBe($balanceAfterFirst);
+});
+
+test('worker can renew the same plan within the renewal window by extending expiry', function () {
+    $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
+    $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
+
+    $expiresSoon = now()->addDays(3);
+    $sub = Subscription::create([
+        'user_id' => $worker->id,
+        'subscription_plan_id' => $plan->id,
+        'plan' => 'basic',
+        'plan_slug' => 'winga-complex',
+        'amount_paid' => $plan->price,
+        'starts_at' => now()->subDays(27),
+        'expires_at' => $expiresSoon,
+        'status' => 'active',
+        'payment_status' => 'completed',
+        'payment_reference' => 'seed-'.uniqid(),
+        'payment_method' => 'wallet',
+    ]);
+
+    $service = app(SubscriptionService::class);
+    $service->payFromWallet($worker->fresh(), $plan);
+
+    $sub->refresh();
+    expect($sub->status)->toBe('active')
+        ->and($sub->expires_at->toDateTimeString())->toBe($expiresSoon->copy()->addDays($plan->duration_days)->toDateTimeString());
+    expect((float) $sub->amount_paid)->toBe((float) $plan->price * 2);
+});
+
 test('worker cannot activate subscription with insufficient wallet balance', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
     $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 1000]);
-    $plan = SubscriptionPlan::where('slug', 'msingi')->firstOrFail();
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
 
     Livewire::actingAs($worker)
         ->test(SubscriptionComponent::class)
@@ -265,14 +331,14 @@ test('worker cannot activate subscription with insufficient wallet balance', fun
 test('subscriptions:expire command marks expired subscriptions', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
     $worker = User::factory()->create(['role' => 'winga']);
-    $plan = SubscriptionPlan::where('slug', 'msingi')->firstOrFail();
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
 
     // Create a subscription that expired yesterday
     Subscription::create([
         'user_id' => $worker->id,
         'subscription_plan_id' => $plan->id,
         'plan' => 'basic',
-        'plan_slug' => 'msingi',
+        'plan_slug' => 'winga-complex',
         'amount_paid' => $plan->price,
         'starts_at' => now()->subDays(31),
         'expires_at' => now()->subDay(),
@@ -294,14 +360,14 @@ test('subscriptions:expire command marks expired subscriptions', function () {
 // ============================================================
 test('SubscriptionPlan durationLabel returns correct label', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
-    $plan = SubscriptionPlan::where('slug', 'msingi')->firstOrFail();
+    $plan = SubscriptionPlan::where('slug', 'winga-complex')->firstOrFail();
     expect($plan->durationLabel())->toBe('Mwezi 1');
 
-    $plan2 = SubscriptionPlan::where('slug', 'kawaida')->firstOrFail();
-    expect($plan2->durationLabel())->toBe('Miezi 3');
+    $plan2 = SubscriptionPlan::where('slug', 'winga-karume')->firstOrFail();
+    expect($plan2->durationLabel())->toBe('Mwezi 1');
 
-    $plan3 = SubscriptionPlan::where('slug', 'bora')->firstOrFail();
-    expect($plan3->durationLabel())->toBe('Miezi 6');
+    $plan3 = SubscriptionPlan::where('slug', 'winga-kkoo')->firstOrFail();
+    expect($plan3->durationLabel())->toBe('Miezi 3');
 });
 
 // ============================================================
@@ -310,7 +376,7 @@ test('SubscriptionPlan durationLabel returns correct label', function () {
 test('snippe webhook activates pending subscription on success', function () {
     $this->artisan('db:seed', ['--class' => 'SubscriptionPlansSeeder']);
     $worker = User::factory()->create(['role' => 'winga']);
-    $plan = SubscriptionPlan::where('slug', 'kawaida')->firstOrFail();
+    $plan = SubscriptionPlan::where('slug', 'winga-karume')->firstOrFail();
     $ref = 'sub-webhook-test-'.uniqid();
 
     // Create pending subscription
@@ -318,7 +384,7 @@ test('snippe webhook activates pending subscription on success', function () {
         'user_id' => $worker->id,
         'subscription_plan_id' => $plan->id,
         'plan' => 'basic',
-        'plan_slug' => 'kawaida',
+        'plan_slug' => 'winga-karume',
         'amount_paid' => $plan->price,
         'starts_at' => null,
         'expires_at' => null,
@@ -350,7 +416,7 @@ test('snippe webhook activates pending subscription on success', function () {
     expect(
         Subscription::where('user_id', $worker->id)
             ->where('status', 'active')
-            ->where('plan_slug', 'kawaida')
+            ->where('plan_slug', 'winga-karume')
             ->exists()
     )->toBeTrue();
 });
@@ -409,4 +475,92 @@ test('mteja can request a winga service and winga can accept it', function () {
         ->call('accept', ServiceRequest::first()->id);
 
     expect(ServiceRequest::first()->fresh()->status)->toBe('accepted');
+});
+
+test('service request wallet payment funds escrow and code completes the job', function () {
+    $winga = User::factory()->create([
+        'role' => 'winga',
+        'onboarding_completed' => true,
+        'wallet_balance' => 0,
+    ]);
+    $mteja = User::factory()->create([
+        'role' => 'mteja',
+        'onboarding_completed' => true,
+        'wallet_balance' => 100_000,
+    ]);
+
+    $category = Category::query()->first();
+    if ($category === null) {
+        $category = Category::create([
+            'name' => 'Test Cat SR',
+            'slug' => 'test-cat-sr-'.uniqid(),
+            'is_active' => true,
+        ]);
+    }
+
+    $service = Service::create([
+        'user_id' => $winga->id,
+        'category_id' => $category->id,
+        'title' => 'Uhariri wa Video',
+        'description' => str_repeat('Maelezo ya huduma. ', 5),
+        'price' => 25_000,
+        'price_type' => 'fixed',
+        'status' => 'active',
+        'images' => null,
+    ]);
+
+    $package = ServicePackage::create([
+        'service_id' => $service->id,
+        'title' => 'Pro',
+        'description' => null,
+        'price' => 25_000,
+        'sort_order' => 0,
+    ]);
+
+    Livewire::actingAs($mteja)
+        ->test(WingaProfile::class, ['id' => $winga->id])
+        ->call('openRequestModal', $service->id)
+        ->set('requestPackageId', $package->id)
+        ->call('submitServiceRequest');
+
+    $sr = ServiceRequest::first();
+    expect($sr->status)->toBe('pending');
+
+    Livewire::actingAs($winga)
+        ->test(HudumaMaombi::class)
+        ->call('accept', $sr->id);
+
+    expect($sr->fresh()->status)->toBe('accepted');
+
+    Livewire::actingAs($mteja)
+        ->test(HudumaMalipo::class)
+        ->call('openPaymentModal', $sr->id)
+        ->call('confirmPayment');
+
+    $sr->refresh();
+    expect($sr->status)->toBe('in_progress');
+    expect($sr->payment)->not->toBeNull()
+        ->and($sr->payment->status)->toBe('escrowed')
+        ->and($sr->payment->job_id)->toBeNull()
+        ->and($sr->payment->service_request_id)->toBe($sr->id);
+
+    Livewire::actingAs($mteja)
+        ->test(Codes::class)
+        ->call('generateServiceRequestCode', $sr->id);
+
+    $code = $sr->fresh()->completion_code;
+    expect($code)->not->toBeNull()->and(strlen($code))->toBe(6);
+
+    Livewire::actingAs($winga)
+        ->test(WekaCode::class)
+        ->call('selectServiceRequest', $sr->id)
+        ->set('code', $code)
+        ->call('verify');
+
+    $sr->refresh();
+    expect($sr->status)->toBe('completed')
+        ->and($sr->payment->status)->toBe('released');
+
+    $expectedWorker = Payment::calculateFromWorkerBid(25_000)['worker_amount'];
+    expect((float) $winga->fresh()->wallet_balance)->toBe((float) $expectedWorker);
 });

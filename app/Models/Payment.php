@@ -21,6 +21,7 @@ class Payment extends Model
 
     protected $fillable = [
         'job_id',
+        'service_request_id',
         'employer_id',
         'worker_id',
         'amount',
@@ -92,29 +93,48 @@ class Payment extends Model
         }
 
         $this->update([
-            'status'             => 'released',
-            'payout_status'      => 'processing',
+            'status' => 'released',
+            'payout_status' => 'processing',
             'escrow_released_at' => now(),
         ]);
 
         // Create processing transaction (confirmed on payout webhook)
+        $label = $this->escrowItemLabel();
+
         Transaction::create([
-            'user_id'      => $this->worker_id,
-            'payment_id'   => $this->id,
-            'type'         => 'credit',
-            'amount'       => $this->worker_amount,
-            'description'  => "Malipo ya kazi: {$this->job->title}",
+            'user_id' => $this->worker_id,
+            'payment_id' => $this->id,
+            'type' => 'credit',
+            'amount' => $this->worker_amount,
+            'description' => ($this->job_id ? 'Malipo ya kazi: ' : 'Malipo ya huduma: ').$label,
             'balance_after' => $this->worker->wallet_balance,
-            'status'        => 'processing',
+            'status' => 'processing',
         ]);
 
         return true;
+    }
+
+    public function escrowItemLabel(): string
+    {
+        if ($this->job_id) {
+            return (string) ($this->job?->title ?? '');
+        }
+        if ($this->service_request_id) {
+            return (string) ($this->serviceRequest?->service?->title ?? '');
+        }
+
+        return '';
     }
 
     // Relationships
     public function job()
     {
         return $this->belongsTo(Job::class);
+    }
+
+    public function serviceRequest()
+    {
+        return $this->belongsTo(ServiceRequest::class, 'service_request_id');
     }
 
     public function employer()

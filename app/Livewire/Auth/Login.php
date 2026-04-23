@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class Login extends Component
@@ -26,9 +27,20 @@ class Login extends Component
     {
         $this->validate();
 
-        $user = User::where('email', $this->email)->first();
+        $email = Str::lower(trim((string) $this->email));
+        $password = trim((string) $this->password);
 
-        if ($user && Hash::check($this->password, $user->password)) {
+        $user = User::where('email', $email)->first();
+
+        $hash = $user ? $user->getRawOriginal('password') : null;
+
+        if ($user && is_string($hash) && $hash !== '' && Hash::check($password, $hash)) {
+            if ($user->suspended_at) {
+                session()->flash('suspension_appeal', $user->suspensionAppealFlashData());
+
+                return redirect()->route('account-suspended');
+            }
+
             // Admin anapitiliza moja kwa moja (Bypass 2FA/OTP)
             if ($user->isAdmin()) {
                 Auth::login($user, $this->remember);
