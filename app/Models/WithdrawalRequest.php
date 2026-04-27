@@ -55,7 +55,8 @@ class WithdrawalRequest extends Model
         if ($this->network) {
             return match (strtolower($this->network)) {
                 'airtel'   => 'Airtel Money',
-                'tigo'     => 'Mixx by Yas (TigoPesa)',
+                'vodacom'  => 'M-Pesa (Vodacom)',
+                'tigo'     => 'TigoPesa',
                 'halopesa' => 'HaloPesa',
                 default    => ucfirst($this->network),
             };

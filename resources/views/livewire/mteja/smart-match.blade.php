@@ -86,7 +86,7 @@
                             @if(count($match['matched_skills']) > 0)
                             <div class="mb-2">
                                 <div class="flex flex-wrap gap-1">
-                                    @foreach($match['matched_skills']->take(4) as $skill)
+                                    @foreach(array_slice($match['matched_skills'], 0, 4) as $skill)
                                     <span class="inline-flex items-center rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs px-2 py-0.5">
                                         {{ $skill }}
                                     </span>

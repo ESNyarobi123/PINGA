@@ -102,6 +102,25 @@
 
                 {{-- Actions --}}
                 <div class="flex flex-wrap gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    @if(in_array($job->status, ['open', 'draft']))
+                        <button wire:click="editJob({{ $job->id }})" class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 hover:scale-105 transition-all duration-200">
+                            <span class="flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                                {{ __('messages.my_jobs.edit') }}
+                            </span>
+                        </button>
+                        <button wire:click="deleteJob({{ $job->id }})" wire:confirm="Una uhakika unataka kufuta kazi hii? Hii kitendo hakiwezi kurudishwa." class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30 dark:hover:text-red-400 hover:scale-105 transition-all duration-200">
+                            <span class="flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                                {{ __('messages.my_jobs.delete') }}
+                            </span>
+                        </button>
+                    @endif
+
                     @if($job->status === 'open')
                         <a href="{{ route('mteja.maombi', ['job_id' => $job->id]) }}" class="group/btn px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200" wire:navigate>
                             <span class="flex items-center gap-1">
@@ -178,6 +197,106 @@
     @if($jobs->hasPages())
     <div class="mt-6">
         {{ $jobs->links() }}
+    </div>
+    @endif
+
+    {{-- Edit Job Modal --}}
+    @if($showEditModal)
+    <div wire:click="closeEditModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div wire:click.stop class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-zinc-900 dark:text-white">{{ __('messages.my_jobs.edit_title') }}</h2>
+                    <button wire:click="closeEditModal" class="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <form wire:submit="updateJob" class="space-y-5">
+                    {{-- Title --}}
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.title') }} <span class="text-red-500">*</span></label>
+                        <input wire:model="editTitle" type="text" placeholder="{{ __('messages.post_job.title_placeholder') }}" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                        @error('editTitle') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    {{-- Description --}}
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.description') }} <span class="text-red-500">*</span></label>
+                        <textarea wire:model="editDescription" rows="4" placeholder="{{ __('messages.post_job.description_placeholder') }}" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm"></textarea>
+                        @error('editDescription') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    {{-- Category & Location --}}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.category') }} <span class="text-red-500">*</span></label>
+                            <select wire:model="editCategoryId" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                                <option value="">{{ __('messages.post_job.category_placeholder') }}</option>
+                                @foreach($categories as $category)
+                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('editCategoryId') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.location') }} <span class="text-red-500">*</span></label>
+                            <input wire:model="editLocation" type="text" placeholder="{{ __('messages.post_job.location_placeholder') }}" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                            @error('editLocation') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+
+                    {{-- Budget --}}
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.budget_type') }}</label>
+                            <select wire:model="editBudgetType" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                                <option value="fixed">Fixed</option>
+                                <option value="hourly">Hourly</option>
+                                <option value="daily">Daily</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Min (TZS) <span class="text-red-500">*</span></label>
+                            <input wire:model="editBudgetMin" type="number" min="1000" step="100" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                            @error('editBudgetMin') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Max (TZS)</label>
+                            <input wire:model="editBudgetMax" type="number" min="1000" step="100" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                        </div>
+                    </div>
+
+                    {{-- Urgency & Duration --}}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Urgency</label>
+                            <select wire:model="editUrgency" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="very_urgent">Very Urgent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Duration</label>
+                            <input wire:model="editDuration" type="text" placeholder="e.g. 3 days, 1 week" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
+                        </div>
+                    </div>
+
+                    {{-- Actions --}}
+                    <div class="flex gap-3 pt-2">
+                        <button type="submit" class="flex-1 px-4 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors text-sm">
+                            {{ __('messages.my_jobs.save_changes') }}
+                        </button>
+                        <button type="button" wire:click="closeEditModal" class="px-4 py-2.5 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-sm">
+                            {{ __('messages.my_jobs.cancel_edit') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
     @endif
 </div>

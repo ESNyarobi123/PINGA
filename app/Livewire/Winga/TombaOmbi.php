@@ -18,8 +18,8 @@ class TombaOmbi extends Component
 
     public bool $showForm = false;
 
-    /** Supported: airtel | tigo | halopesa */
-    public string $network = 'airtel';
+    /** Supported: airtel | vodacom | tigo | halopesa */
+    public string $network = 'vodacom';
 
     public string $phone = '';
 
@@ -60,7 +60,7 @@ class TombaOmbi extends Component
         $this->validate([
             'amount'  => ['required', 'numeric', 'min:1000', 'max:' . (float) $user->wallet_balance],
             'phone'   => ['required', 'string', 'min:10'],
-            'network' => ['required', 'in:airtel,tigo,halopesa'],
+            'network' => ['required', 'in:airtel,vodacom,tigo,halopesa'],
         ], [
             'amount.min' => 'Kiwango cha chini cha kutoa ni TZS 1,000',
             'amount.max' => 'Hauwezi kutoa zaidi ya salio lako la TZS ' . number_format((float) $user->wallet_balance),
@@ -77,6 +77,7 @@ class TombaOmbi extends Component
             // Map network to existing method enum value
             $methodValue = match (strtolower($this->network)) {
                 'airtel'   => 'airtel_money',
+                'vodacom'  => 'mpesa',
                 'tigo'     => 'tigopesa',
                 default    => 'mpesa',
             };

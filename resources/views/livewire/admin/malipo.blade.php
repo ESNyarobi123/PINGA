@@ -299,17 +299,17 @@
                         </thead>
                         <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @forelse($escrows as $escrow)
-                            @php $daysOnEscrow = $escrow->created_at->diffInDays(now()); @endphp
+                            @php $daysOnEscrow = (int) $escrow->created_at->diffInDays(now()); @endphp
                             <tr class="{{ $daysOnEscrow >= 14 ? 'bg-red-50 dark:bg-red-900/20' : ($daysOnEscrow >= 7 ? 'bg-amber-50 dark:bg-amber-900/20' : '') }}">
                                 <td class="px-4 py-3">
                                     <div>
-                                        <p class="text-sm font-medium text-zinc-900 dark:text-white">{{ $escrow->job->title }}</p>
-                                        <p class="text-xs text-zinc-500">#{{ $escrow->job->id }}</p>
+                                        <p class="text-sm font-medium text-zinc-900 dark:text-white">{{ $escrow->job?->title ?? $escrow->escrowItemLabel() ?? '—' }}</p>
+                                        <p class="text-xs text-zinc-500">@if($escrow->job_id)#{{ $escrow->job_id }}@else—@endif</p>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">{{ $escrow->job->employer?->name ?? 'Unknown' }}</td>
+                                <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">{{ $escrow->employer?->name ?? 'Unknown' }}</td>
                                 <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">
-                                    {{ $escrow->job->hiredWorker?->name ?? '—' }}
+                                    {{ $escrow->worker?->name ?? '—' }}
                                 </td>
                                 <td class="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-white">
                                     TZS {{ number_format($escrow->amount) }}
@@ -318,7 +318,7 @@
                                     {{ $daysOnEscrow }} {{ __('messages.admin_malipo.days') }}
                                 </td>
                                 <td class="px-4 py-3">
-                                    @if($escrow->job->hold_status === 'active')
+                                    @if($escrow->job?->hold_status === 'active')
                                     <span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg">
                                         🟡 Held
                                     </span>
@@ -338,7 +338,7 @@
                                                 class="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded transition">
                                             ↩️ {{ __('messages.admin_malipo.refund') }}
                                         </button>
-                                        <a href="{{ route('admin.kazi.detail', $escrow->job->id) }}" 
+                                        <a href="{{ $escrow->job ? route('admin.kazi.detail', $escrow->job->id) : '#' }}" 
                                            class="px-2 py-1 text-xs bg-zinc-600 hover:bg-zinc-700 text-white rounded transition">
                                             👁️ {{ __('messages.admin_malipo.view') }}
                                         </a>

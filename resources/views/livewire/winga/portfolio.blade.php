@@ -26,8 +26,6 @@
                 <div>
                     <p class="text-sm font-medium text-blue-900 dark:text-blue-100">{{ __('messages.portfolio.upload_limit') }}</p>
                     <p class="text-xs text-blue-700 dark:text-blue-300">{{ $remaining }}/{{ $max }} {{ __('messages.portfolio.remaining') }}</p>
-                    {{-- DEBUG INFO --}}
-                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-1">DEBUG: Plan: {{ $debug_info['plan_slug'] }}, Current: {{ $debug_info['current_count'] }}, Can Upload: {{ $canUpload ? 'YES' : 'NO' }}</p>
                 </div>
             </div>
             @if(!$canUpload)
@@ -131,7 +129,7 @@
     <div wire:click="toggleUploadModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div wire:click.stop class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl max-w-md w-full p-6">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold text-zinc-900 dark:text-white">{{ __('messages.portfolio.add_new_title') }}</h2>
+                <h2 class="text-xl font-bold text-zinc-900 dark:text-white">{{ $editingId ? __('messages.portfolio.edit_title', ['default' => 'Hariri Portfolio']) : __('messages.portfolio.add_new_title') }}</h2>
                 <button wire:click="toggleUploadModal" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -142,7 +140,7 @@
             <form wire:submit="save">
                 <div class="space-y-4">
                     <flux:input wire:model="title" type="text" placeholder="{{ __('messages.portfolio.title_placeholder') }}" required />
-                    <flux:textarea wire:model="description" placeholder="{{ __('messages.portfolio.description_placeholder') }}" rows="3" required />
+                    <flux:textarea wire:model="description" placeholder="{{ __('messages.portfolio.description_placeholder') }}" rows="3" />
                     <flux:select wire:model="categoryId" required>
                         <option value="">{{ __('messages.portfolio.category_placeholder') }}</option>
                         @foreach($categories as $category)
@@ -156,7 +154,7 @@
                     {{-- Image Upload --}}
                     <div>
                         <flux:label>{{ __('messages.portfolio.image_label') }}</flux:label>
-                        <flux:input wire:model="image" type="file" accept="image/*" required />
+                        <flux:input wire:model="image" type="file" accept="image/*" {{ $editingId ? '' : 'required' }} />
                         @error('image')
                             <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
                         @enderror

@@ -27,6 +27,7 @@ class SmartMatch extends Component
     {
         $this->jobs = Job::where('employer_id', auth()->id())
             ->whereIn('status', ['open', 'in_progress'])
+            ->where('is_approved', true)
             ->latest()
             ->get(['id', 'title'])
             ->toArray();

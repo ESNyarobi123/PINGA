@@ -16,6 +16,11 @@ class Portfolio extends Model
         'image_path',
         'project_url',
         'category_id',
+        'is_featured',
+    ];
+
+    protected $casts = [
+        'is_featured' => 'boolean',
     ];
 
     public function user()

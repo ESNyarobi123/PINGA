@@ -52,14 +52,19 @@ class SnippePayoutService
 
     /**
      * Detect the mobile network from a phone number.
-     * Returns Snippe network code: Airtel | Tigo | Halopesa
+     * Returns Snippe network code: Airtel | Vodacom | Tigo | Halopesa
      */
     public function detectNetwork(string $phone): string
     {
         $phone = $this->formatPhone($phone);
         $prefix = substr($phone, 3, 2); // e.g. "78" from "255781000000"
 
-        // Airtel Tanzania: 68, 69, 78 (some), 79 (some)
+        // Vodacom (M-Pesa): 74, 75, 76, 77
+        if (in_array($prefix, ['74', '75', '76', '77'])) {
+            return 'Vodacom';
+        }
+
+        // Airtel Tanzania: 68, 69, 78, 79
         if (in_array($prefix, ['68', '69', '78', '79'])) {
             return 'Airtel';
         }
@@ -69,8 +74,13 @@ class SnippePayoutService
             return 'Halopesa';
         }
 
-        // Mixx by Yas (TigoPesa): 65, 67, 71, 74, 75, 76
-        return 'Tigo';
+        // Mixx by Yas (TigoPesa): 65, 67, 71
+        if (in_array($prefix, ['65', '67', '71'])) {
+            return 'Tigo';
+        }
+
+        // Default fallback
+        return 'Vodacom';
     }
 
     /**

@@ -87,20 +87,27 @@
 
                 {{-- Network (auto-detected) --}}
                 <div>
-                    <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                         {{ __('messages.tomba_ombi.network_label') }}
                     </label>
-                    <div class="flex gap-3">
-                        @foreach(['airtel' => 'Airtel Money', 'tigo' => 'Mixx by Yas (Tigo)', 'halopesa' => 'HaloPesa'] as $value => $label)
-                        <label class="flex-1 cursor-pointer">
+                    <div class="grid grid-cols-4 gap-3">
+                        @foreach([
+                            'vodacom'  => ['label' => 'M-Pesa', 'icon' => 'mobile-networks/vodacom.jpeg'],
+                            'airtel'   => ['label' => 'Airtel Money', 'icon' => 'mobile-networks/airtel.png'],
+                            'tigo'     => ['label' => 'TigoPesa', 'icon' => 'mobile-networks/yas.png'],
+                            'halopesa' => ['label' => 'HaloPesa', 'icon' => 'mobile-networks/halopesa.jpeg'],
+                        ] as $value => $network)
+                        <label class="cursor-pointer flex flex-col items-center gap-2">
                             <input type="radio" wire:model="network" value="{{ $value }}" class="sr-only peer" />
-                            <div class="rounded-lg border-2 px-3 py-2 text-center text-xs font-medium transition-colors
-                                peer-checked:border-winga-500 peer-checked:bg-winga-50 peer-checked:text-winga-700
-                                dark:peer-checked:bg-winga-900/20 dark:peer-checked:text-winga-300
-                                border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400
-                                hover:border-zinc-400 dark:hover:border-zinc-500">
-                                {{ $label }}
+                            <div class="w-14 h-14 rounded-full border-2 overflow-hidden flex items-center justify-center bg-white dark:bg-zinc-800 transition-all duration-200
+                                peer-checked:border-winga-500 peer-checked:ring-2 peer-checked:ring-winga-200 dark:peer-checked:ring-winga-800 peer-checked:shadow-lg peer-checked:shadow-winga-200/50 dark:peer-checked:shadow-winga-900/30
+                                border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500">
+                                <img src="{{ asset($network['icon']) }}" alt="{{ $network['label'] }}" class="w-10 h-10 object-contain">
                             </div>
+                            <span class="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 text-center leading-tight transition-colors
+                                peer-checked:text-winga-600 dark:peer-checked:text-winga-400 peer-checked:font-semibold">
+                                {{ $network['label'] }}
+                            </span>
                         </label>
                         @endforeach
                     </div>

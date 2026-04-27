@@ -327,50 +327,72 @@
 
             {{-- Scrollable carousel --}}
             <div class="relative">
-                <div id="winga-carousel" class="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scroll-smooth scrollbar-none"
+                <div id="winga-carousel" class="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scroll-smooth scrollbar-none"
                      style="-ms-overflow-style:none; scrollbar-width:none;">
                     @foreach($featuredWingas as $winga)
                     <a href="{{ route('wafanyakazi.show', $winga->id) }}" wire:navigate
-                       class="flex-shrink-0 w-64 snap-start group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 hover:border-winga-400 dark:hover:border-winga-500 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden">
-                        {{-- Top banner --}}
-                        <div class="h-16 bg-gradient-to-r from-winga-500 to-winga-600 relative">
+                       class="flex-shrink-0 w-72 snap-start group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 hover:border-winga-400 dark:hover:border-winga-500 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+                        {{-- Top gradient banner --}}
+                        <div class="h-20 bg-gradient-to-r from-winga-500 to-winga-600 relative overflow-hidden">
                             <div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.4) 1px, transparent 0); background-size: 16px 16px;"></div>
-                            <div class="absolute -bottom-1 right-3 text-xs font-bold text-white/80 uppercase tracking-wider bg-amber-500 px-2 py-0.5 rounded-md">{{ __('messages.home.featured_card_badge') }}</div>
+                            {{-- Featured badge --}}
+                            <div class="absolute top-3 right-3 text-[10px] font-bold text-white uppercase tracking-wider bg-amber-500/90 backdrop-blur-sm px-2 py-0.5 rounded-md flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                {{ __('messages.home.featured_card_badge') }}
+                            </div>
                         </div>
-                        {{-- Avatar --}}
+                        {{-- Profile content --}}
                         <div class="px-5 pt-0 pb-5">
-                            <div class="-mt-8 mb-3">
+                            {{-- Avatar overlapping banner --}}
+                            <div class="-mt-10 mb-3 flex items-end gap-3">
                                 @if($winga->avatar)
                                     <img src="{{ asset('storage/'.$winga->avatar) }}"
-                                         class="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-900 object-cover shadow-md"
+                                         class="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-900 object-cover shadow-md group-hover:ring-2 group-hover:ring-winga-300 dark:group-hover:ring-winga-600 transition-all duration-300"
                                          alt="{{ $winga->name }}" />
                                 @else
-                                    <div class="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-900 bg-winga-500 flex items-center justify-center shadow-md">
+                                    <div class="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-900 bg-winga-500 flex items-center justify-center shadow-md group-hover:ring-2 group-hover:ring-winga-300 dark:group-hover:ring-winga-600 transition-all duration-300">
                                         <span class="text-2xl font-bold text-white">{{ strtoupper(substr($winga->name, 0, 1)) }}</span>
                                     </div>
                                 @endif
+                                {{-- Rating pill next to avatar --}}
+                                <div class="pb-1">
+                                    <span class="inline-flex items-center gap-1 text-xs font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-500/20">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                        {{ number_format($winga->average_rating ?? 4.5, 1) }}
+                                    </span>
+                                </div>
                             </div>
+                            {{-- Name & location --}}
                             <h3 class="font-bold text-zinc-900 dark:text-white text-base truncate group-hover:text-winga-600 dark:group-hover:text-winga-400 transition-colors">
                                 {{ $winga->name }}
                             </h3>
-                            <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                📍 {{ $winga->mkoa ?? $winga->wilaya ?? 'Tanzania' }}
+                            <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-1">
+                                <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+                                {{ $winga->mkoa ?? $winga->wilaya ?? 'Tanzania' }}
                             </p>
+                            {{-- Skills --}}
                             @if($winga->skills->isNotEmpty())
                             <div class="flex flex-wrap gap-1.5 mt-3">
                                 @foreach($winga->skills->take(3) as $skill)
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-winga-50 dark:bg-winga-900/30 text-winga-700 dark:text-winga-400 font-medium border border-winga-100 dark:border-winga-800">
+                                <span class="text-[11px] px-2 py-0.5 rounded-full bg-winga-50 dark:bg-winga-900/30 text-winga-700 dark:text-winga-400 font-medium border border-winga-100 dark:border-winga-800">
                                     {{ $skill->name }}
                                 </span>
                                 @endforeach
+                                @if($winga->skills->count() > 3)
+                                <span class="text-[11px] px-1.5 py-0.5 text-zinc-400 dark:text-zinc-500 font-medium">
+                                    +{{ $winga->skills->count() - 3 }}
+                                </span>
+                                @endif
                             </div>
                             @endif
+                            {{-- Price & CTA --}}
                             <div class="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                                <span class="text-xs text-amber-500 font-bold flex items-center gap-1">
-                                    ⭐ {{ number_format($winga->average_rating ?? 4.5, 1) }}
+                                <span class="text-sm font-bold text-winga-600 dark:text-winga-400">
+                                    TZS {{ number_format($winga->bei_wastani ?? 0) }}<span class="text-xs font-normal text-zinc-400">/siku</span>
                                 </span>
-                                <span class="text-xs font-bold text-winga-600 dark:text-winga-400">
-                                    TZS {{ number_format($winga->bei_wastani ?? 0) }}+
+                                <span class="text-xs font-semibold text-winga-600 dark:text-winga-400 group-hover:underline flex items-center gap-0.5 transition-colors">
+                                    {{ __('messages.search_workers.view_profile') }}
+                                    <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                                 </span>
                             </div>
                         </div>
@@ -379,11 +401,11 @@
                 </div>
 
                 {{-- Scroll arrows --}}
-                <button onclick="document.getElementById('winga-carousel').scrollBy({left: -300, behavior: 'smooth'})"
+                <button onclick="document.getElementById('winga-carousel').scrollBy({left: -320, behavior: 'smooth'})"
                     class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-10 h-10 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-lg flex items-center justify-center text-zinc-700 dark:text-zinc-300 hover:bg-winga-50 hover:text-winga-600 transition hidden sm:flex">
                     ‹
                 </button>
-                <button onclick="document.getElementById('winga-carousel').scrollBy({left: 300, behavior: 'smooth'})"
+                <button onclick="document.getElementById('winga-carousel').scrollBy({left: 320, behavior: 'smooth'})"
                     class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-10 h-10 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-lg flex items-center justify-center text-zinc-700 dark:text-zinc-300 hover:bg-winga-50 hover:text-winga-600 transition hidden sm:flex">
                     ›
                 </button>

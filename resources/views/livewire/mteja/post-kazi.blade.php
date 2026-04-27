@@ -97,21 +97,6 @@
                         <p class="text-xs text-zinc-500 mt-1">{{ __('messages.post_job.budget_max_note') }}</p>
                     </div>
                 </div>
-
-                {{-- System Fee Info --}}
-                @php $feePercent = \App\Models\Payment::getPlatformFeePercent(); @endphp
-                <div class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div class="flex items-start gap-2">
-                        <svg class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <div class="text-xs text-blue-700 dark:text-blue-400">
-                            <p class="font-semibold">Ada ya mfumo: {{ $feePercent }}%</p>
-                            <p class="mt-0.5">Ada ya {{ $feePercent }}% <strong>inakwatwa kwa Winga</strong> (mfanyakazi) kutoka kwa malipo yake — wewe kama mteja <strong>unalipa dau la mfanyakazi tu</strong>, bila ongezeko lolote.</p>
-                            <p class="mt-1 font-medium">Mfano: Mfanyakazi akidai TZS 100,000 → wewe utalipa TZS 100,000. Winga anapokea TZS {{ number_format(100000 - round(100000 * $feePercent / 100)) }}.</p>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {{-- Duration & Urgency --}}

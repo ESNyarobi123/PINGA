@@ -5,7 +5,6 @@ namespace App\Livewire\Winga;
 use App\Models\Category;
 use App\Models\Portfolio as PortfolioModel;
 use App\Services\SubscriptionLimitsService;
-use App\Services\SubscriptionService;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -94,6 +93,7 @@ class Portfolio extends Component
                     'category_id' => $this->categoryId,
                     'project_url' => $this->projectUrl,
                     'image_path' => $imagePath ?? $portfolio->image_path,
+                    'is_featured' => $this->is_featured,
                 ]);
                 $this->dispatch('toast', message: 'Portfolio imehifadhiwa!', type: 'success');
             }
@@ -105,6 +105,7 @@ class Portfolio extends Component
                 'category_id' => $this->categoryId,
                 'project_url' => $this->projectUrl,
                 'image_path' => $imagePath,
+                'is_featured' => $this->is_featured,
             ]);
 
             $remaining = $this->limitsService->remainingPortfolioSlots($user);
@@ -114,7 +115,8 @@ class Portfolio extends Component
             );
         }
 
-        $this->reset(['title', 'description', 'categoryId', 'projectUrl', 'image', 'editingId']);
+        $this->reset(['title', 'description', 'categoryId', 'projectUrl', 'image', 'editingId', 'is_featured']);
+        $this->showUploadModal = false;
     }
 
     public function edit(int $id): void
@@ -129,7 +131,9 @@ class Portfolio extends Component
             $this->description = $portfolio->description ?? '';
             $this->categoryId = $portfolio->category_id;
             $this->projectUrl = $portfolio->project_url;
-            $this->image = null; // Reset image for editing
+            $this->is_featured = $portfolio->is_featured ?? false;
+            $this->image = null;
+            $this->showUploadModal = true;
         }
     }
 
@@ -188,12 +192,6 @@ class Portfolio extends Component
             'remaining' => $remaining,
             'max' => $max,
             'canUpload' => $this->limitsService->canUploadPortfolio($user),
-            'debug_info' => [
-                'plan_slug' => app(SubscriptionService::class)->getActivePlan($user)?->plan_slug ?? 'free',
-                'limit' => $this->limitsService->getLimit($user, 'portfolio_imgs'),
-                'current_count' => $user->portfolioImages()->count(),
-                'remaining_slots' => $remaining,
-            ],
         ])
             ->layout('layouts.winga')
             ->title('Portfolio Yangu');

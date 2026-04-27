@@ -214,87 +214,106 @@
         <div class="space-y-6">
             {{-- Quick Actions --}}
             <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
-                <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-4 inline-flex items-center gap-2">
+                <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-5 inline-flex items-center gap-2">
                     <x-fluent-icon name="options-24" :size="24" />
                     {{ __('messages.winga_dash.quick_actions') }}
                 </h2>
-                <div class="space-y-3">
-                    <a href="{{ route('tafuta-kazi') }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {{-- Find Jobs --}}
+                    <a href="{{ route('tafuta-kazi') }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm shadow-blue-200 dark:shadow-blue-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left min-w-0">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.qa_find_jobs_title') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.qa_find_jobs_desc') }}</p>
-                            <p class="text-xs text-winga-600 dark:text-winga-400 mt-1 font-medium">
-                                <a href="{{ route('winga.kazi-karibu') }}" class="hover:underline" wire:navigate>{{ __('messages.winga_dash.qa_nearby_link') }}</a>
-                            </p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.qa_find_jobs_title') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.qa_find_jobs_desc') }}</p>
                         </div>
                     </a>
-                    <a href="{{ route('winga.maombi-yangu', ['filter' => 'accepted']) }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    {{-- Accepted Applications --}}
+                    <a href="{{ route('winga.maombi-yangu', ['filter' => 'accepted']) }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-sm shadow-emerald-200 dark:shadow-emerald-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.qa_accepted_apps') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.qa_accepted_apps_desc') }}</p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.qa_accepted_apps') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.qa_accepted_apps_desc') }}</p>
                         </div>
                     </a>
-                    <a href="{{ route('winga.huduma-zangu') }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    {{-- My Services --}}
+                    <a href="{{ route('winga.huduma-zangu') }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-teal-300 dark:hover:border-teal-700 hover:bg-teal-50/50 dark:hover:bg-teal-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 shadow-sm shadow-teal-200 dark:shadow-teal-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left min-w-0">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.qa_my_services') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.qa_my_services_desc') }}</p>
-                            <p class="text-xs text-winga-600 dark:text-winga-400 mt-1">
-                                <a href="{{ route('winga.post-huduma') }}" class="font-medium hover:underline" wire:navigate>{{ __('messages.winga_dash.qa_add_service_link') }}</a>
-                            </p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.qa_my_services') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.qa_my_services_desc') }}</p>
                         </div>
                     </a>
-                    <a href="{{ route('winga.huduma-maombi') }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    {{-- Client Requests --}}
+                    <a href="{{ route('winga.huduma-maombi') }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-sm shadow-indigo-200 dark:shadow-indigo-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.qa_client_requests') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.qa_client_requests_desc') }}</p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.qa_client_requests') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.qa_client_requests_desc') }}</p>
                         </div>
                     </a>
-                    <a href="{{ route('winga.portfolio') }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    {{-- Portfolio --}}
+                    <a href="{{ route('winga.portfolio') }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-green-300 dark:hover:border-green-700 hover:bg-green-50/50 dark:hover:bg-green-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 shadow-sm shadow-green-200 dark:shadow-green-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.portfolio') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.view_work') }}</p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.portfolio') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.view_work') }}</p>
                         </div>
                     </a>
-                    
-                    <a href="{{ route('winga.weka-code') }}" class="w-full flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors" wire:navigate>
-                        <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    {{-- Enter Payment Code --}}
+                    <a href="{{ route('winga.weka-code') }}" class="group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-purple-300 dark:hover:border-purple-700 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5" wire:navigate>
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-sm shadow-purple-200 dark:shadow-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
                             </svg>
                         </div>
-                        <div class="flex-1 text-left">
-                            <p class="font-medium text-zinc-900 dark:text-white">{{ __('messages.winga_dash.enter_code') }}</p>
-                            <p class="text-sm text-zinc-500">{{ __('messages.winga_dash.receive_payment') }}</p>
+                        <div class="text-center">
+                            <p class="font-semibold text-sm text-zinc-900 dark:text-white leading-tight">{{ __('messages.winga_dash.enter_code') }}</p>
+                            <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 leading-tight">{{ __('messages.winga_dash.receive_payment') }}</p>
                         </div>
                     </a>
-                    <p class="text-center pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                        <a href="{{ route('winga.maombi-yangu') }}" class="text-sm font-medium text-winga-600 hover:text-winga-500 dark:text-winga-400" wire:navigate>{{ __('messages.winga_dash.qa_all_applications_link') }}</a>
-                    </p>
+                </div>
+
+                {{-- Quick Links Bar --}}
+                <div class="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+                    <a href="{{ route('winga.kazi-karibu') }}" class="text-xs font-medium text-winga-600 hover:text-winga-500 dark:text-winga-400 inline-flex items-center gap-1 transition-colors" wire:navigate>
+                        <x-fluent-icon name="location-20" :size="14" />
+                        {{ __('messages.winga_dash.qa_nearby_link') }}
+                    </a>
+                    <span class="text-zinc-300 dark:text-zinc-700">|</span>
+                    <a href="{{ route('winga.post-huduma') }}" class="text-xs font-medium text-winga-600 hover:text-winga-500 dark:text-winga-400 inline-flex items-center gap-1 transition-colors" wire:navigate>
+                        <x-fluent-icon name="add-20" :size="14" />
+                        {{ __('messages.winga_dash.qa_add_service_link') }}
+                    </a>
+                    <span class="text-zinc-300 dark:text-zinc-700">|</span>
+                    <a href="{{ route('winga.maombi-yangu') }}" class="text-xs font-medium text-winga-600 hover:text-winga-500 dark:text-winga-400 inline-flex items-center gap-1 transition-colors" wire:navigate>
+                        <x-fluent-icon name="arrow-right-20" :size="14" />
+                        {{ __('messages.winga_dash.qa_all_applications_link') }}
+                    </a>
                 </div>
             </div>
 
