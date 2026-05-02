@@ -90,7 +90,7 @@ class Wallet extends Component
 
         $user = auth()->user();
         $service = new \App\Services\SnippePaymentService;
-        $orderId = 'DEP-'.strtoupper(\Illuminate\Support\Str::random(8));
+        $orderId = 'D' . $user->id . 'M' . substr(md5(uniqid()), 0, 8);
 
         $phoneToUse = $this->phone;
         // Convert local 07xx to 2557xx standard format
@@ -126,7 +126,7 @@ class Wallet extends Component
 
             $user = auth()->user();
             $service = new \App\Services\SnippePaymentService;
-            $orderId = 'DEP-'.strtoupper(\Illuminate\Support\Str::random(8));
+            $orderId = 'C' . $user->id . 'K' . substr(md5(uniqid()), 0, 8);
 
             $customer = [
                 'firstname' => explode(' ', $user->name)[0] ?? 'Employer',

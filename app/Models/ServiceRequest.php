@@ -14,6 +14,7 @@ class ServiceRequest extends Model
         'client_id',
         'message',
         'status',
+        'decline_reason',
         'responded_at',
         'completion_code',
         'code_generated_at',

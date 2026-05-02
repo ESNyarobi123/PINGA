@@ -89,11 +89,13 @@ class Ramani extends Component
 
     private function dispatchMapUpdate($user): void
     {
-        $this->js('window.__wingaRamaniApplyMap('.Js::from([
+        $data = Js::from([
             'jobs' => $this->jobs,
             'userLat' => $user->latitude !== null ? (float) $user->latitude : null,
             'userLng' => $user->longitude !== null ? (float) $user->longitude : null,
-        ]).')');
+        ]);
+
+        $this->js("if(typeof window.__wingaRamaniApplyMap==='function'){window.__wingaRamaniApplyMap({$data})}");
     }
 
     public function render()

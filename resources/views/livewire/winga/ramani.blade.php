@@ -3,85 +3,6 @@
         @push('styles')
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
         @endpush
-        @push('scripts')
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-            <script>
-                (function () {
-                    function escHtml(s) {
-                        return String(s ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/"/g, '&quot;');
-                    }
-
-                    window.__wingaRamaniApplyMap = function (data) {
-                        var el = document.getElementById('winga-ramani-map');
-                        if (!el || typeof L === 'undefined') return;
-
-                        var viewJobLabel = el.dataset.viewJob || 'View';
-                        var youHereLabel = el.dataset.youHere || 'You';
-
-                        var jobs = data.jobs || [];
-                        var userLat = data.userLat;
-                        var userLng = data.userLng;
-
-                        if (window.__wingaRamaniMapInstance) {
-                            window.__wingaRamaniMapInstance.remove();
-                            window.__wingaRamaniMapInstance = null;
-                            window.__wingaRamaniMarkersLayer = null;
-                        }
-
-                        var map = L.map(el, { scrollWheelZoom: false });
-                        window.__wingaRamaniMapInstance = map;
-
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 19,
-                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                        }).addTo(map);
-
-                        var markersLayer = L.layerGroup().addTo(map);
-                        window.__wingaRamaniMarkersLayer = markersLayer;
-
-                        var bounds = [];
-
-                        jobs.forEach(function (j) {
-                            if (j.latitude == null || j.longitude == null) return;
-                            var lat = parseFloat(j.latitude);
-                            var lng = parseFloat(j.longitude);
-                            if (isNaN(lat) || isNaN(lng)) return;
-                            var m = L.marker([lat, lng]);
-                            var dist = j.distance != null ? '<br><small>' + escHtml(String(j.distance)) + ' km</small>' : '';
-                            m.bindPopup(
-                                '<strong>' + escHtml(j.title) + '</strong><br>' +
-                                escHtml(j.location) + '<br>' +
-                                '<span class="text-xs">TZS ' + escHtml(String(j.budget_min || 0)) + '</span>' +
-                                dist + '<br><a class="text-winga-600 font-medium" href="' + escHtml(j.url) + '">' + escHtml(viewJobLabel) + '</a>'
-                            );
-                            markersLayer.addLayer(m);
-                            bounds.push([lat, lng]);
-                        });
-
-                        if (userLat != null && userLng != null && !isNaN(parseFloat(userLat)) && !isNaN(parseFloat(userLng))) {
-                            var ulat = parseFloat(userLat);
-                            var ulng = parseFloat(userLng);
-                            L.circleMarker([ulat, ulng], { radius: 10, color: '#059669', fillColor: '#34d399', fillOpacity: 0.85, weight: 2 })
-                                .addTo(map)
-                                .bindPopup(youHereLabel);
-                            bounds.push([ulat, ulng]);
-                        }
-
-                        if (bounds.length > 0) {
-                            map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
-                        } else {
-                            map.setView([-6.7924, 39.2083], 6);
-                        }
-
-                        setTimeout(function () { map.invalidateSize(); }, 100);
-                    };
-                })();
-            </script>
-        @endpush
     @endonce
 
     <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 mb-6">
@@ -116,12 +37,15 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-            <div id="winga-ramani-map" wire:ignore class="h-[min(520px,70vh)] min-h-[400px] w-full z-0 bg-zinc-100 dark:bg-zinc-800"
+            <div id="winga-ramani-map" wire:ignore class="h-[min(520px,70vh)] min-h-100 w-full z-0 bg-zinc-100 dark:bg-zinc-800"
                 data-view-job="{{ __('messages.ramani.view_job') }}"
-                data-you-here="{{ __('messages.ramani.you_are_here') }}"></div>
+                data-you-here="{{ __('messages.ramani.you_are_here') }}"
+                data-jobs="{{ Js::from($jobs) }}"
+                data-user-lat="{{ $userLat }}"
+                data-user-lng="{{ $userLng }}"></div>
             <p class="text-[10px] text-zinc-400 px-3 py-1 border-t border-zinc-100 dark:border-zinc-800">{{ __('messages.ramani.map_attribution') }}</p>
         </div>
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 space-y-4 h-[min(520px,70vh)] min-h-[400px] overflow-y-auto">
+        <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 space-y-4 h-[min(520px,70vh)] min-h-100 overflow-y-auto">
             @if($ready && count($jobs) > 0)
                 @foreach($jobs as $job)
                     <div class="border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 hover:border-winga-400 transition">
@@ -130,7 +54,7 @@
                                 <p class="text-sm text-zinc-500">{{ $job['category'] ?? '—' }}</p>
                                 <h3 class="text-base sm:text-lg font-semibold text-zinc-900 dark:text-white">{{ $job['title'] }}</h3>
                             </div>
-                            <span class="text-xs text-zinc-500 flex-shrink-0">{{ $job['posted_at'] }}</span>
+                            <span class="text-xs text-zinc-500 shrink-0">{{ $job['posted_at'] }}</span>
                         </div>
                         <div class="mt-3 text-sm text-zinc-600 dark:text-zinc-400 space-y-1">
                             <p><strong>{{ __('messages.ramani.location') }}</strong> {{ $job['location'] }}</p>
@@ -159,4 +83,119 @@
             @endif
         </div>
     </div>
+
+    {{-- Map JS: loaded inline so it's available immediately --}}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        (function () {
+            function escHtml(s) {
+                return String(s ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            function applyMap(data) {
+                var el = document.getElementById('winga-ramani-map');
+                if (!el || typeof L === 'undefined') return;
+
+                var viewJobLabel = el.dataset.viewJob || 'View';
+                var youHereLabel = el.dataset.youHere || 'You';
+
+                var jobs = data.jobs || [];
+                var userLat = data.userLat;
+                var userLng = data.userLng;
+
+                if (window.__wingaRamaniMapInstance) {
+                    window.__wingaRamaniMapInstance.remove();
+                    window.__wingaRamaniMapInstance = null;
+                    window.__wingaRamaniMarkersLayer = null;
+                }
+
+                var map = L.map(el, { scrollWheelZoom: false });
+                window.__wingaRamaniMapInstance = map;
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(map);
+
+                var markersLayer = L.layerGroup().addTo(map);
+                window.__wingaRamaniMarkersLayer = markersLayer;
+
+                var bounds = [];
+
+                jobs.forEach(function (j) {
+                    if (j.latitude == null || j.longitude == null) return;
+                    var lat = parseFloat(j.latitude);
+                    var lng = parseFloat(j.longitude);
+                    if (isNaN(lat) || isNaN(lng)) return;
+
+                    var icon = L.divIcon({
+                        className: '',
+                        html: '<div style="background:#059669;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff"><svg style="transform:rotate(45deg)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A7.5 7.5 0 0112.003 21 7.5 7.5 0 013 13.255C3 8.287 7.503 3.5 12 1.5c4.497 2 9 6.787 9 11.755z"/></svg></div>',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    });
+
+                    var m = L.marker([lat, lng], { icon: icon });
+                    var dist = j.distance != null ? '<br><small>' + escHtml(String(j.distance)) + ' km</small>' : '';
+                    m.bindPopup(
+                        '<strong>' + escHtml(j.title) + '</strong><br>' +
+                        escHtml(j.location) + '<br>' +
+                        '<span class="text-xs">TZS ' + escHtml(String(j.budget_min || 0)) + '</span>' +
+                        dist + '<br><a class="text-winga-600 font-medium" href="' + escHtml(j.url) + '">' + escHtml(viewJobLabel) + '</a>'
+                    );
+                    markersLayer.addLayer(m);
+                    bounds.push([lat, lng]);
+                });
+
+                if (userLat != null && userLng != null && !isNaN(parseFloat(userLat)) && !isNaN(parseFloat(userLng))) {
+                    var ulat = parseFloat(userLat);
+                    var ulng = parseFloat(userLng);
+                    L.circleMarker([ulat, ulng], { radius: 10, color: '#059669', fillColor: '#34d399', fillOpacity: 0.85, weight: 2 })
+                        .addTo(map)
+                        .bindPopup(youHereLabel);
+                    bounds.push([ulat, ulng]);
+                }
+
+                if (bounds.length > 0) {
+                    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+                } else {
+                    map.setView([-6.7924, 39.2083], 6);
+                }
+
+                setTimeout(function () { map.invalidateSize(); }, 150);
+            }
+
+            // Initialize from data attributes on first load
+            function initFromDataAttrs() {
+                var el = document.getElementById('winga-ramani-map');
+                if (!el || typeof L === 'undefined') return;
+                try {
+                    var jobs = JSON.parse(el.dataset.jobs || '[]');
+                    var userLat = el.dataset.userLat ? parseFloat(el.dataset.userLat) : null;
+                    var userLng = el.dataset.userLng ? parseFloat(el.dataset.userLng) : null;
+                    applyMap({ jobs: jobs, userLat: userLat, userLng: userLng });
+                } catch (e) {
+                    console.warn('Ramani: failed to parse data attrs', e);
+                }
+            }
+
+            // Listen for Livewire dispatch events for subsequent updates
+            window.__wingaRamaniApplyMap = applyMap;
+
+            // Auto-init when DOM is ready (handles both full page load and Livewire navigate)
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () { setTimeout(initFromDataAttrs, 50); });
+            } else {
+                setTimeout(initFromDataAttrs, 50);
+            }
+
+            // Also listen for Livewire navigate event
+            document.addEventListener('livewire:navigated', function () { setTimeout(initFromDataAttrs, 100); });
+        })();
+    </script>
 </div>

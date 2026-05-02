@@ -27,6 +27,8 @@ Route::middleware('auth')->group(function (): void {
     });
 });
 
-Route::post('/webhooks/snippe', [\App\Http\Controllers\Api\SnippeWebhookController::class, 'handle'])->name('api.webhooks.snippe');
-Route::post('/webhooks/snippe-payout', [\App\Http\Controllers\Api\SnippePayoutWebhookController::class, 'handle'])->name('api.webhooks.snippe-payout');
+Route::middleware(\App\Http\Middleware\VerifySnippeWebhookSignature::class)->group(function (): void {
+    Route::post('/webhooks/snippe', [\App\Http\Controllers\Api\SnippeWebhookController::class, 'handle'])->name('api.webhooks.snippe');
+    Route::post('/webhooks/snippe-payout', [\App\Http\Controllers\Api\SnippePayoutWebhookController::class, 'handle'])->name('api.webhooks.snippe-payout');
+});
 Route::post('/webhooks/selcom-payout', [\App\Http\Controllers\Api\SelcomPayoutWebhookController::class, 'handle'])->name('api.webhooks.selcom-payout');

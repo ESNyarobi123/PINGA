@@ -58,11 +58,11 @@ class TombaOmbi extends Component
         $user = auth()->user();
 
         $this->validate([
-            'amount'  => ['required', 'numeric', 'min:1000', 'max:' . (float) $user->wallet_balance],
+            'amount'  => ['required', 'numeric', 'min:5000', 'max:' . (float) $user->wallet_balance],
             'phone'   => ['required', 'string', 'min:10'],
             'network' => ['required', 'in:airtel,vodacom,tigo,halopesa'],
         ], [
-            'amount.min' => 'Kiwango cha chini cha kutoa ni TZS 1,000',
+            'amount.min' => 'Kiwango cha chini cha kutoa ni TZS 5,000',
             'amount.max' => 'Hauwezi kutoa zaidi ya salio lako la TZS ' . number_format((float) $user->wallet_balance),
             'phone.required' => 'Namba ya simu inahitajika',
         ]);
@@ -104,7 +104,7 @@ class TombaOmbi extends Component
             ]);
 
             // 4. Auto-disburse: try Selcom first, fallback to Snippe
-            $reference = 'withdrawal-' . $withdrawal->id . '-' . now()->timestamp;
+            $reference = 'W' . $withdrawal->id . 'T' . now()->timestamp;
             $payoutSuccess = false;
 
             // Try Selcom first

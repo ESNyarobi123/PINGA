@@ -14,6 +14,10 @@ class HudumaMaombi extends Component
 
     public string $filter = 'pending';
 
+    public ?int $decliningRequestId = null;
+
+    public string $declineReason = '';
+
     public function updatingFilter(): void
     {
         $this->resetPage();
@@ -52,26 +56,68 @@ class HudumaMaombi extends Component
         $this->dispatch('toast', message: __('messages.huduma_maombi.toast_accepted'), type: 'success');
     }
 
+    public function openDeclineModal(int $id): void
+    {
+        $this->decliningRequestId = $id;
+        $this->declineReason = '';
+    }
+
+    public function closeDeclineModal(): void
+    {
+        $this->decliningRequestId = null;
+        $this->declineReason = '';
+    }
+
+    public function confirmDecline(): void
+    {
+        $this->validate([
+            'declineReason' => 'required|string|min:5|max:500',
+        ], [
+            'declineReason.required' => 'Tafadhali andika sababu ya kukataa.',
+            'declineReason.min' => 'Sababu lazima iwe na angalau herufi 5.',
+        ]);
+
+        if (! $this->decliningRequestId) {
+            return;
+        }
+
+        $this->decline($this->decliningRequestId);
+    }
+
     public function decline(int $id): void
     {
         $req = $this->findOwnedRequest($id);
         if (! $req || ! $req->isPending()) {
+            $this->closeDeclineModal();
             return;
         }
 
-        $req->update(['status' => 'declined', 'responded_at' => now()]);
+        $reason = $this->declineReason;
+
+        $req->update([
+            'status' => 'declined',
+            'decline_reason' => $reason,
+            'responded_at' => now(),
+        ]);
+
+        $notifyMessage = __('messages.huduma_maombi.notify_declined_body', [
+            'worker' => auth()->user()->name,
+            'title' => $req->service->title,
+            'package' => ServicePackageSchema::hasPackagesTable() ? ($req->package?->title ?? '—') : '—',
+        ]);
+
+        if ($reason) {
+            $notifyMessage .= "\nSababu: {$reason}";
+        }
 
         $req->client->notify(new WingaNotification(
             title: __('messages.huduma_maombi.notify_declined_title'),
-            message: __('messages.huduma_maombi.notify_declined_body', [
-                'worker' => auth()->user()->name,
-                'title' => $req->service->title,
-                'package' => ServicePackageSchema::hasPackagesTable() ? ($req->package?->title ?? '—') : '—',
-            ]),
+            message: $notifyMessage,
             icon: 'x-circle',
             color: 'zinc',
         ));
 
+        $this->closeDeclineModal();
         $this->dispatch('toast', message: __('messages.huduma_maombi.toast_declined'), type: 'success');
     }
 

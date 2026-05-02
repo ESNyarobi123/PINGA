@@ -408,8 +408,16 @@ test('snippe webhook activates pending subscription on success', function () {
         ],
     ];
 
-    $this->postJson('/api/webhooks/snippe', $webhookPayload)
-        ->assertJson(['status' => 'success']);
+    $body = json_encode($webhookPayload);
+    $timestamp = (string) time();
+    $secret = config('services.snippe.webhook_secret');
+    $signature = hash_hmac('sha256', "{$timestamp}.{$body}", $secret);
+
+    $this->call('POST', '/api/webhooks/snippe', [], [], [], [
+        'HTTP_X-Webhook-Signature' => $signature,
+        'HTTP_X-Webhook-Timestamp' => $timestamp,
+        'CONTENT_TYPE' => 'application/json',
+    ], $body)->assertJson(['status' => 'success']);
 
     // Pending record deleted, new active one created
     expect(Subscription::find($pending->id))->toBeNull();

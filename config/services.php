@@ -38,6 +38,8 @@ return [
     'snippe' => [
         'key' => env('SNIPPE_API_KEY', 'snp_0d35efa325afd1690a3729a0eb9138b138f3b647edceb92910de115b6dbf3af5'),
         'url' => env('SNIPPE_URL', 'https://api.snippe.sh'),
+        'webhook_secret' => env('SNIPPE_WEBHOOK_SECRET'),
+        'webhook_base_url' => env('SNIPPE_WEBHOOK_BASE_URL', 'https://winga.ericksky.online'),
     ],
 
     'selcom' => [

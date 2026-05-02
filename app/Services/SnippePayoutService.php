@@ -24,7 +24,8 @@ class SnippePayoutService
     {
         $this->apiKey     = config('services.snippe.key');
         $this->baseUrl    = config('services.snippe.url', 'https://api.snippe.sh');
-        $this->webhookUrl = 'https://winga.ericksky.online/api/webhooks/snippe-payout';
+        $webhookBase      = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
+        $this->webhookUrl = $webhookBase . '/api/webhooks/snippe-payout';
     }
 
     /**
@@ -210,7 +211,8 @@ class SnippePayoutService
         $paymentId    = $metadata['payment_id'] ?? null;
         $withdrawalId = $metadata['withdrawal_id'] ?? null;
         $workerId     = $metadata['worker_id'] ?? $metadata['user_id'] ?? null;
-        $amount       = $payload['amount'] ?? $payload['data']['amount'] ?? 0;
+        $rawAmount    = $payload['amount'] ?? $payload['data']['amount'] ?? 0;
+        $amount       = is_array($rawAmount) ? ($rawAmount['value'] ?? 0) : $rawAmount;
 
         match ($status) {
             'completed', 'success'  => $this->handlePayoutCompleted($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
@@ -347,5 +349,32 @@ class SnippePayoutService
             ->delay(now()->addHour());
 
         Log::error("Snippe Payout Failed: {$reference} — TZS {$amount}");
+    }
+
+    /**
+     * Calculate the payout fee for a given amount.
+     *
+     * @return array{amount: int, fee_amount: int, total_amount: int, currency: string}|null
+     */
+    public function calculateFee(int $amount): ?array
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->apiKey}",
+                'Accept'        => 'application/json',
+            ])->timeout(15)->get("{$this->baseUrl}/v1/payouts/fee", ['amount' => $amount]);
+
+            if ($response->successful()) {
+                return $response->json('data');
+            }
+
+            Log::error('Snippe Payout Fee Error', ['status' => $response->status(), 'body' => $response->body()]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Snippe Payout Fee Exception', ['message' => $e->getMessage()]);
+
+            return null;
+        }
     }
 }

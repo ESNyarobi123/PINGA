@@ -11,10 +11,13 @@ class SnippePaymentService
 
     protected string $baseUrl;
 
+    protected string $webhookBaseUrl;
+
     public function __construct()
     {
         $this->apiKey = config('services.snippe.key');
         $this->baseUrl = config('services.snippe.url', 'https://api.snippe.sh');
+        $this->webhookBaseUrl = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
     }
 
     /**
@@ -31,8 +34,7 @@ class SnippePaymentService
                 $phoneNumber = '255'.$phoneNumber;
             }
 
-            // Hardcode production webhook URL to bypass .env APP_URL issues during testing
-            $webhookUrl = 'https://winga.ericksky.online/api/webhooks/snippe';
+            $webhookUrl = $this->webhookBaseUrl . '/api/webhooks/snippe';
             $payload = [
                 'payment_type' => 'mobile',
                 'details' => [
@@ -89,9 +91,9 @@ class SnippePaymentService
                 $phoneNumber = '255'.substr($phoneNumber, 1);
             }
 
-            $webhookUrl = 'https://winga.ericksky.online/api/webhooks/snippe';
-            $redirectUrl = 'https://winga.ericksky.online/mteja/wallet';
-            $cancelUrl = 'https://winga.ericksky.online/mteja/wallet?status=cancelled';
+            $webhookUrl = $this->webhookBaseUrl . '/api/webhooks/snippe';
+            $redirectUrl = $this->webhookBaseUrl . '/mteja/wallet';
+            $cancelUrl = $this->webhookBaseUrl . '/mteja/wallet?status=cancelled';
             $payload = [
                 'payment_type' => 'card',
                 'details' => [
@@ -121,7 +123,7 @@ class SnippePaymentService
                 ]),
             ];
 
-            Log::error('Initiating Snippe Card Payment - Payload:', ['payload' => $payload]);
+            Log::info('Initiating Snippe Card Payment - Payload:', ['payload' => $payload]);
 
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->apiKey}",

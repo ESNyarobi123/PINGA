@@ -32,5 +32,6 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="NOMINATIM_ENABLED" value="false"/>
+        <env name="SNIPPE_WEBHOOK_SECRET" value="test_webhook_secret_for_phpunit"/>
     </php>
 </phpunit>

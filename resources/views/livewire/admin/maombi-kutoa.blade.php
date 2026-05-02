@@ -309,31 +309,38 @@
 
     {{-- Rejection Modal --}}
     @if($selectedRequestId)
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" wire:click.self="closeRejectModal">
+        <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md" wire:click.stop>
             <div class="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
                 <h3 class="text-lg font-bold text-zinc-900 dark:text-white">{{ __('messages.admin_withdrawals.reject_title') }}</h3>
                 <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('messages.admin_withdrawals.reject_desc') }}</p>
             </div>
             <div class="p-6">
-                <form wire:submit="rejectWithdrawal({{ $selectedRequestId }}, '{{ $rejectionReason }}')">
+                <form wire:submit="confirmReject">
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{{ __('messages.admin_withdrawals.rejection_reason') }}</label>
-                            <textarea wire:model.live="rejectionReason"
+                            <textarea wire:model="rejectionReason"
                                       rows="3"
                                       placeholder="{{ __('messages.admin_withdrawals.rejection_placeholder') }}"
                                       class="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm"
                                       required></textarea>
                         </div>
                         <div class="flex justify-end gap-3">
-                            <button type="button" wire:click="$set('selectedRequestId', null)"
-                                    class="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg text-sm font-medium transition">
+                            <button type="button" wire:click="closeRejectModal"
+                                    wire:loading.attr="disabled" wire:target="confirmReject"
+                                    class="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg text-sm font-medium transition disabled:opacity-50">
                                 {{ __('messages.admin_withdrawals.cancel') }}
                             </button>
                             <button type="submit"
-                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition">
-                                {{ __('messages.admin_withdrawals.reject_request') }}
+                                    wire:loading.attr="disabled" wire:target="confirmReject"
+                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-70 inline-flex items-center gap-2">
+                                <svg wire:loading wire:target="confirmReject" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                </svg>
+                                <span wire:loading.remove wire:target="confirmReject">{{ __('messages.admin_withdrawals.reject_request') }}</span>
+                                <span wire:loading wire:target="confirmReject">Inakataa...</span>
                             </button>
                         </div>
                     </div>

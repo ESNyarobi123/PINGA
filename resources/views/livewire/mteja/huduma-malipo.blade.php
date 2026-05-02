@@ -57,17 +57,8 @@
                     </button>
                 </div>
 
-                <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 mb-5 space-y-1.5">
-                    @php $feePercent = \App\Models\Payment::getPlatformFeePercent(); @endphp
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 mb-5">
                     <div class="flex items-center justify-between text-sm">
-                        <span class="text-zinc-600 dark:text-zinc-400">{{ __('messages.huduma_malipo.modal_price_label') }}</span>
-                        <span class="font-semibold text-zinc-900 dark:text-white">TZS {{ number_format($servicePriceAmount ?? 0) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
-                        <span>{{ __('messages.huduma_malipo.modal_fee_note', ['percent' => $feePercent]) }}</span>
-                        <span>- TZS {{ number_format($platformFeeAmount ?? 0) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200 dark:border-emerald-700">
                         <span class="text-emerald-700 dark:text-emerald-400 font-bold">{{ __('messages.huduma_malipo.modal_you_pay') }}</span>
                         <span class="text-lg font-bold text-emerald-700 dark:text-emerald-400">TZS {{ number_format($paymentAmount ?? 0) }}</span>
                     </div>

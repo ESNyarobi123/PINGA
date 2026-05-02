@@ -274,17 +274,8 @@
                     </button>
                 </div>
 
-                <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 mb-5 space-y-1.5">
-                    @php $feePercent = \App\Models\Payment::getPlatformFeePercent(); @endphp
+                <div class="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 mb-5">
                     <div class="flex items-center justify-between text-sm">
-                        <span class="text-zinc-600 dark:text-zinc-400">Dau la Winga:</span>
-                        <span class="font-semibold text-zinc-900 dark:text-white">TZS {{ number_format($workerBidAmount ?? 0) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
-                        <span>Komisioni ya Winga ({{ $feePercent }}%) — inalipwa na Winga</span>
-                        <span>- TZS {{ number_format($platformFeeAmount ?? 0) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200 dark:border-emerald-700">
                         <span class="text-emerald-700 dark:text-emerald-400 font-bold">Unalipa:</span>
                         <span class="text-lg font-bold text-emerald-700 dark:text-emerald-400">TZS {{ number_format($paymentAmount ?? 0) }}</span>
                     </div>
@@ -370,15 +361,11 @@
                 <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Unaweza kuzungumza naye kwanza, kisha mlipane ukikubaliana.</p>
             </div>
 
-            {{-- Fee preview --}}
-            <div class="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3 mb-5 space-y-1.5 text-sm">
+            {{-- Amount preview --}}
+            <div class="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3 mb-5 text-sm">
                 <div class="flex justify-between">
-                    <span class="text-zinc-500 dark:text-zinc-400">Dau la Winga:</span>
-                    <span class="font-semibold text-zinc-900 dark:text-white">TZS {{ number_format($workerBidAmount ?? 0) }}</span>
-                </div>
-                <div class="flex justify-between text-xs text-zinc-400">
-                    <span>Komisioni ya mfumo ({{ \App\Models\Payment::getPlatformFeePercent() }}%) — inalipwa na Winga</span>
-                    <span>- TZS {{ number_format($platformFeeAmount ?? 0) }}</span>
+                    <span class="text-emerald-700 dark:text-emerald-400 font-bold">Unalipa:</span>
+                    <span class="text-lg font-bold text-emerald-700 dark:text-emerald-400">TZS {{ number_format($paymentAmount ?? 0) }}</span>
                 </div>
             </div>
 

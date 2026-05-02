@@ -243,9 +243,25 @@ class MaombiKutoa extends Component
         $this->dispatch('toast', message: 'Withdrawal approved and processing', type: 'success');
     }
 
+    public function confirmReject(): void
+    {
+        if (! $this->selectedRequestId) {
+            return;
+        }
+
+        $this->rejectWithdrawal($this->selectedRequestId, $this->rejectionReason);
+    }
+
     public function rejectWithdrawal(int $id, string $reason = ''): void
     {
         $req = WithdrawalRequest::with('user')->findOrFail($id);
+
+        if ($req->status === 'rejected') {
+            $this->closeRejectModal();
+            $this->dispatch('toast', message: 'This request has already been rejected', type: 'warning');
+
+            return;
+        }
 
         // Return funds to user wallet
         $req->user->increment('wallet_balance', $req->amount);
@@ -284,7 +300,14 @@ class MaombiKutoa extends Component
             'reason' => $reason,
         ]);
 
+        $this->closeRejectModal();
         $this->dispatch('toast', message: 'Withdrawal rejected and funds returned', type: 'error');
+    }
+
+    public function closeRejectModal(): void
+    {
+        $this->selectedRequestId = null;
+        $this->rejectionReason = '';
     }
 
     public function markAsCompleted(int $id): void
