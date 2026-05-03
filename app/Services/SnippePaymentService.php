@@ -148,6 +148,33 @@ class SnippePaymentService
     }
 
     /**
+     * Check payment status by reference (polling fallback for mobile money).
+     */
+    public function checkPaymentStatus(string $reference): ?array
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->apiKey}",
+                'Accept' => 'application/json',
+            ])->get("{$this->baseUrl}/v1/payments/{$reference}");
+
+            if ($response->successful()) {
+                $json = $response->json();
+
+                return $json['data'] ?? $json ?? null;
+            }
+
+            Log::warning('Snippe Status Check Failed: '.$response->status().' - '.$response->body(), ['reference' => $reference]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Snippe Status Check Exception: '.$e->getMessage(), ['reference' => $reference]);
+
+            return null;
+        }
+    }
+
+    /**
      * Helper to ensure URLs use HTTPS scheme
      */
     private function ensureHttps(string $url, bool $force = false): string

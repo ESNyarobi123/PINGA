@@ -197,62 +197,121 @@
                 </div>
 
                 @elseif($depositStep === 3)
-                {{-- Step 3: USSD Push Sent — Waiting Animation --}}
-                <div class="py-6 text-center space-y-6">
-                    {{-- Animated Phone with Pulse --}}
-                    <div class="relative mx-auto w-28 h-28">
-                        {{-- Outer pulse rings --}}
-                        <div class="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" style="animation-duration: 2s;"></div>
-                        <div class="absolute inset-2 rounded-full bg-emerald-400/30 animate-ping" style="animation-duration: 2s; animation-delay: 0.5s;"></div>
-                        {{-- Phone icon circle --}}
-                        <div class="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                            <svg class="w-12 h-12 text-white animate-bounce" style="animation-duration: 1.5s;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    {{-- Status Text --}}
-                    <div class="space-y-2">
-                        <h3 class="text-xl font-bold text-zinc-900 dark:text-white">Ombi Limetumwa!</h3>
-                        <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
-                            Utapokea <span class="font-semibold text-emerald-600 dark:text-emerald-400">USSD push</span> kwenye simu yako. Tafadhali ingiza PIN yako ya Mobile Money kukamilisha malipo.
-                        </p>
-                    </div>
-
-                    {{-- Animated Steps --}}
-                    <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 max-w-xs mx-auto space-y-3">
-                        <div class="flex items-center gap-3 text-left">
-                            <div class="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                {{-- Step 3: USSD Push Sent — Status Polling --}}
+                <div wire:poll.3s="checkDepositStatus" class="py-6 text-center space-y-6">
+                    @if($paymentStatus === 'completed')
+                        {{-- Success State --}}
+                        <div class="relative mx-auto w-28 h-28">
+                            <div class="relative w-28 h-28 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                                <svg class="w-14 h-14 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
                             </div>
-                            <span class="text-sm text-zinc-700 dark:text-zinc-300">Ombi limepokelewa</span>
                         </div>
-                        <div class="flex items-center gap-3 text-left">
-                            <div class="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <span class="text-sm text-zinc-700 dark:text-zinc-300">USSD imetumwa kwenye simu</span>
+                        <div class="space-y-2">
+                            <h3 class="text-xl font-bold text-emerald-700 dark:text-emerald-400">Malipo Yamefanikiwa!</h3>
+                            <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mx-auto">Salio lako limeongezeka. Asante kwa kutumia Winga.</p>
                         </div>
-                        <div class="flex items-center gap-3 text-left">
-                            <div class="w-7 h-7 rounded-full border-2 border-amber-400 flex items-center justify-center flex-shrink-0 relative">
-                                <div class="w-3 h-3 rounded-full bg-amber-400 animate-pulse"></div>
-                            </div>
-                            <span class="text-sm font-medium text-amber-600 dark:text-amber-400">Inasubiri PIN yako...</span>
-                        </div>
-                    </div>
+                        <button wire:click="$set('showDepositModal', false)" class="px-6 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors text-sm">
+                            Endelea
+                        </button>
 
-                    {{-- Dotted loading bar --}}
-                    <div class="flex items-center justify-center gap-1.5 pt-2">
-                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0s;"></div>
-                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0.15s;"></div>
-                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0.3s;"></div>
-                    </div>
+                    @elseif($paymentStatus === 'failed')
+                        {{-- Failed State --}}
+                        <div class="relative mx-auto w-28 h-28">
+                            <div class="relative w-28 h-28 rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+                                <svg class="w-14 h-14 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <h3 class="text-xl font-bold text-red-700 dark:text-red-400">Malipo Yameshindwa</h3>
+                            <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mx-auto">Muamala haukufanikiwa. Tafadhali hakikisha una salio la kutosha au jaribu tena.</p>
+                        </div>
+                        <div class="flex gap-3 justify-center">
+                            <button wire:click="$set('depositStep', 2)" class="px-6 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors text-sm">
+                                Jaribu Tena
+                            </button>
+                            <button wire:click="$set('showDepositModal', false)" class="px-6 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm">
+                                Funga
+                            </button>
+                        </div>
 
-                    {{-- Close Button --}}
-                    <button wire:click="$set('showDepositModal', false)" class="mt-2 px-6 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm">
-                        Funga
-                    </button>
+                    @elseif($paymentStatus === 'timeout')
+                        {{-- Timeout State --}}
+                        <div class="relative mx-auto w-28 h-28">
+                            <div class="relative w-28 h-28 rounded-full bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                <svg class="w-14 h-14 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <h3 class="text-xl font-bold text-amber-700 dark:text-amber-400">Muda Umekwisha</h3>
+                            <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mx-auto">Hatujapata majibu ya muamala. Tafadhali angalia salio lako baadaye au jaribu tena.</p>
+                        </div>
+                        <div class="flex gap-3 justify-center">
+                            <button wire:click="$set('depositStep', 2)" class="px-6 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors text-sm">
+                                Jaribu Tena
+                            </button>
+                            <button wire:click="$set('showDepositModal', false)" class="px-6 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm">
+                                Funga
+                            </button>
+                        </div>
+
+                    @else
+                        {{-- Pending State — Waiting Animation --}}
+                        <div class="relative mx-auto w-28 h-28">
+                            <div class="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" style="animation-duration: 2s;"></div>
+                            <div class="absolute inset-2 rounded-full bg-emerald-400/30 animate-ping" style="animation-duration: 2s; animation-delay: 0.5s;"></div>
+                            <div class="relative w-28 h-28 rounded-full bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                                <svg class="w-12 h-12 text-white animate-bounce" style="animation-duration: 1.5s;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"/>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <h3 class="text-xl font-bold text-zinc-900 dark:text-white">Ombi Limetumwa!</h3>
+                            <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                                Utapokea <span class="font-semibold text-emerald-600 dark:text-emerald-400">USSD push</span> kwenye simu yako. Tafadhali ingiza PIN yako ya Mobile Money kukamilisha malipo.
+                            </p>
+                        </div>
+
+                        <div class="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 max-w-xs mx-auto space-y-3">
+                            <div class="flex items-center gap-3 text-left">
+                                <div class="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                </div>
+                                <span class="text-sm text-zinc-700 dark:text-zinc-300">Ombi limepokelewa</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-left">
+                                <div class="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                </div>
+                                <span class="text-sm text-zinc-700 dark:text-zinc-300">USSD imetumwa kwenye simu</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-left">
+                                <div class="w-7 h-7 rounded-full border-2 border-amber-400 flex items-center justify-center shrink-0 relative">
+                                    <div class="w-3 h-3 rounded-full bg-amber-400 animate-pulse"></div>
+                                </div>
+                                <span class="text-sm font-medium text-amber-600 dark:text-amber-400">Inasubiri PIN yako...</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-center gap-1.5 pt-2">
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0s;"></div>
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0.15s;"></div>
+                            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0.3s;"></div>
+                        </div>
+
+                        <p class="text-xs text-zinc-400">Inaangalia status kila sekunde 3...</p>
+
+                        <button wire:click="$set('showDepositModal', false)" class="mt-2 px-6 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm">
+                            Funga
+                        </button>
+                    @endif
                 </div>
                 @endif
             </div>

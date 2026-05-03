@@ -68,8 +68,8 @@ class KaziZangu extends Component
         }
 
         $this->editingJobId = $job->id;
-        $this->editTitle = $job->title;
-        $this->editDescription = $job->description ?? '';
+        $this->editTitle = $job->getLocalizedTitle();
+        $this->editDescription = $job->getLocalizedDescription() ?? '';
         $this->editCategoryId = $job->category_id ?? '';
         $this->editLocation = $job->location ?? '';
         $this->editBudgetType = $job->budget_type ?? 'fixed';
@@ -115,7 +115,9 @@ class KaziZangu extends Component
 
         $job->update([
             'title' => $this->editTitle,
+            'title_en' => $this->editTitle,
             'description' => $this->editDescription,
+            'description_en' => $this->editDescription,
             'category_id' => $this->editCategoryId,
             'location' => $this->editLocation,
             'budget_type' => $this->editBudgetType,
@@ -124,6 +126,7 @@ class KaziZangu extends Component
             'urgency' => $this->editUrgency,
             'duration' => $this->editDuration,
             'is_approved' => false, // Needs re-approval after edit
+            'translation_status' => 'pending',
         ]);
 
         \App\Jobs\TranslateJobPosting::dispatch($job);

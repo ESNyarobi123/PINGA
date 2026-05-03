@@ -19,6 +19,12 @@ class Wallet extends Component
 
     public $phone;
 
+    public ?string $paymentReference = null;
+
+    public string $paymentStatus = 'pending'; // pending, completed, failed, checking
+
+    public int $pollCount = 0;
+
     // Withdrawal properties (Task 8)
     public bool $showWithdrawModal = false;
 
@@ -60,6 +66,9 @@ class Wallet extends Component
         $this->depositStep = 1;
         $this->paymentMethod = '';
         $this->amount = null;
+        $this->paymentReference = null;
+        $this->paymentStatus = 'pending';
+        $this->pollCount = 0;
         $this->resetValidation();
     }
 
@@ -108,11 +117,46 @@ class Wallet extends Component
         $response = $service->createMobilePayment((float) $this->amount, $phoneToUse, $customer, $orderId);
 
         if ($response && ($response['status'] === 'success' || isset($response['data']['reference']))) {
-            $this->depositStep = 3; // Show success screen
-            $this->amount = null;
+            $this->paymentReference = $response['data']['reference'] ?? null;
+            $this->depositStep = 3; // Show waiting screen
+            $this->paymentStatus = 'pending';
+            $this->pollCount = 0;
         } else {
             session()->flash('error_message', 'Imeshindikana kutengeneza muamala. Tafadhali jaribu tena.');
         }
+    }
+
+    public function checkDepositStatus(): void
+    {
+        if (! $this->paymentReference || $this->paymentStatus !== 'pending') {
+            return;
+        }
+
+        $this->pollCount++;
+
+        // Stop polling after ~40 attempts (~2 minutes at 3s intervals)
+        if ($this->pollCount > 40) {
+            $this->paymentStatus = 'timeout';
+
+            return;
+        }
+
+        $service = new \App\Services\SnippePaymentService;
+        $statusData = $service->checkPaymentStatus($this->paymentReference);
+
+        if (! $statusData) {
+            // Keep pending, will retry on next poll
+            return;
+        }
+
+        $status = $statusData['status'] ?? 'pending';
+
+        if ($status === 'completed' || $status === 'success') {
+            $this->paymentStatus = 'completed';
+        } elseif (in_array($status, ['failed', 'cancelled', 'rejected', 'expired'], true)) {
+            $this->paymentStatus = 'failed';
+        }
+        // else: keep pending, will retry on next poll
     }
 
     public function initiateCardPayment()

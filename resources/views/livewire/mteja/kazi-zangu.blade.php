@@ -217,7 +217,7 @@
                 <form wire:submit="updateJob" class="space-y-5">
                     {{-- Title --}}
                     <div>
-                        <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.title') }} <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">{{ __('messages.post_job.job_title') }} <span class="text-red-500">*</span></label>
                         <input wire:model="editTitle" type="text" placeholder="{{ __('messages.post_job.title_placeholder') }}" class="w-full px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-zinc-800 dark:text-white text-sm">
                         @error('editTitle') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
                     </div>
