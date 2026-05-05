@@ -22,6 +22,9 @@
                 <flux:checkbox wire:model="remember" /> 
                 {{ __('messages.auth.remember_me') }}
             </label>
+            <a href="{{ route('password.request') }}" class="text-sm text-winga-600 dark:text-winga-400 hover:text-winga-700 font-medium transition-colors" wire:navigate>
+                Umesahau nenosiri?
+            </a>
         </div>
 
         <div class="pt-2">

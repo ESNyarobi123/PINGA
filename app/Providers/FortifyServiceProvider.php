@@ -76,8 +76,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::twoFactorChallengeView(fn () => view('pages::auth.two-factor-challenge'));
         Fortify::confirmPasswordView(fn () => view('pages::auth.confirm-password'));
         Fortify::registerView(fn () => view('pages::auth.register'));
-        Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));
-        Fortify::requestPasswordResetLinkView(fn () => view('pages::auth.forgot-password'));
+        // Password reset handled by App\Livewire\Auth\ForgotPassword (OTP-based)
     }
 
     /**

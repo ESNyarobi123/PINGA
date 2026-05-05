@@ -48,6 +48,7 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', \App\Livewire\Auth\Register::class)->name('register');
     Route::get('/login', \App\Livewire\Auth\Login::class)->name('login');
     Route::get('/verify-otp', \App\Livewire\Auth\VerifyOtp::class)->name('verify-otp');
+    Route::get('/forgot-password', \App\Livewire\Auth\ForgotPassword::class)->name('password.request');
 });
 
 // ========================================
