@@ -287,4 +287,30 @@
             @endif
         </div>
     </div>
+
+    {{-- Email Export Section --}}
+    <div class="mt-8">
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-zinc-900 dark:to-zinc-800 rounded-xl border border-blue-200 dark:border-zinc-700 p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h3 class="font-bold text-zinc-900 dark:text-white mb-1">📧 Pakua Email Za Watumiaji</h3>
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400">Pakua orodha ya email zote za watumiaji kwa format ya CSV (Excel).</p>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <a href="{{ route('admin.export-emails') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Pakua Emails Only
+                    </a>
+                    <a href="{{ route('admin.export-emails-details') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-sm font-medium rounded-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Pakua na Maelezo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

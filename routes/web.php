@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\EmailExportController;
 use App\Livewire\Public\Kuhusu;
 use App\Livewire\Public\TafutaKazi;
 use App\Livewire\Public\TafutaWafanyakazi;
@@ -142,6 +143,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/subscription-plans', \App\Livewire\Admin\SubscriptionPlans::class)->name('subscription-plans');
         Route::get('/settings', \App\Livewire\Admin\Settings::class)->name('settings');
         Route::get('/audit-logs', \App\Livewire\Admin\AuditLogs::class)->name('audit-logs');
+
+        // Email Export Routes
+        Route::get('/export-emails', [EmailExportController::class, 'export'])->name('export-emails');
+        Route::get('/export-emails-details', [EmailExportController::class, 'exportWithDetails'])->name('export-emails-details');
     });
     // Shared: Messages + Notifications
     Route::get('/messages', \App\Livewire\Shared\Messages::class)->name('messages');
