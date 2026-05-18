@@ -1154,6 +1154,74 @@ return [
         'audit_logs' => 'Kumbukumbu za Mfumo',
         'settings' => 'Mipangilio',
         'reports_tools' => 'RIPOTI & ZANA',
+        'announcements' => 'Matangazo',
+    ],
+
+    // Admin - Matangazo (Site Announcements)
+    'admin_matangazo' => [
+        'title' => 'Matangazo',
+        'subtitle' => 'Tuma matangazo kwa watumiaji wa welcome page, mteja na winga.',
+        'new' => 'Tangazo Jipya',
+        'empty' => 'Hakuna matangazo bado. Bonyeza "Tangazo Jipya" kuanza.',
+        'create_title' => 'Tangazo Jipya',
+        'edit_title' => 'Hariri Tangazo',
+        'edit' => 'Hariri',
+        'delete' => 'Futa',
+        'activate' => 'Washa',
+        'deactivate' => 'Zima',
+        'disabled' => 'Limezimwa',
+        'confirm_delete' => 'Una uhakika unataka kufuta tangazo hili?',
+        'created' => 'Tangazo limechapishwa.',
+        'updated' => 'Tangazo limehifadhiwa.',
+        'toggled' => 'Hali ya tangazo imebadilika.',
+        'deleted' => 'Tangazo limefutwa.',
+        'cancel' => 'Ghairi',
+        'save' => 'Hifadhi',
+        'publish' => 'Chapisha',
+        'from' => 'Kuanzia',
+        'until' => 'Hadi',
+        'min_view' => 'min view',
+        'not_dismissible' => 'Halifungiki',
+        'fields' => [
+            'title' => 'Kichwa',
+            'body' => 'Maelezo',
+            'type' => 'Aina',
+            'audiences' => 'Lengo (nani anaona)',
+            'cta_label' => 'Maandishi ya Kitufe (hiari)',
+            'cta_url' => 'URL ya Kitufe (hiari)',
+            'starts_at' => 'Linaanza (hiari)',
+            'ends_at' => 'Linaisha (hiari)',
+            'min_view_seconds' => 'Lazima lionekane sekunde ngapi kabla ya kufungwa?',
+            'is_active' => 'Liko hai',
+            'is_dismissible' => 'Linaweza kufungwa na mtumiaji',
+        ],
+        'types' => [
+            'info' => '💡 Habari',
+            'success' => '✅ Mafanikio',
+            'warning' => '⚠️ Onyo',
+            'danger' => '🚨 Tahadhari',
+        ],
+        'audiences' => [
+            'public' => 'Welcome Page',
+            'mteja' => 'Mteja Dashboard',
+            'winga' => 'Winga Dashboard',
+        ],
+        'placeholders' => [
+            'cta_label' => 'Mfano: Soma zaidi',
+        ],
+        'help' => [
+            'min_view_seconds' => 'Kwa modal — 0 inamaanisha mtumiaji anaweza kufunga mara moja. Tumia 3–5 kwa habari muhimu.',
+            'timezone' => 'Saa unayoingiza ni saa za Tanzania (EAT, UTC+3).',
+        ],
+        'errors' => [
+            'audience_required' => 'Chagua angalau lengo moja (welcome, mteja, au winga).',
+        ],
+    ],
+
+    // Announcement modal (shared)
+    'announcement' => [
+        'got_it' => 'Nimeelewa',
+        'wait' => 'Subiri',
     ],
 
     // Mteja (Client) Sidebar

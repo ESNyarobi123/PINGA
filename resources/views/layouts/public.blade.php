@@ -7,6 +7,9 @@
         {{-- Top Navigation --}}
         @include('partials.public-nav')
 
+        {{-- Site Announcements (public) --}}
+        <x-site-announcement-stack scope="public" />
+
         {{-- Page Content --}}
         <main>
             {{ $slot }}

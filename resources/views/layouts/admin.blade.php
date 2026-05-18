@@ -61,6 +61,9 @@
                     <flux:sidebar.item icon="star" :href="route('admin.subscriptions')" :current="request()->routeIs('admin.subscriptions')" wire:navigate>
                         {{ __('messages.admin_sidebar.subscriptions') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="megaphone" :href="route('admin.matangazo')" :current="request()->routeIs('admin.matangazo')" wire:navigate>
+                        {{ __('messages.admin_sidebar.announcements') }}
+                    </flux:sidebar.item>
                 </div>
 
                 <div class="px-3 pt-4 pb-2 text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider in-data-flux-sidebar-collapsed-desktop:hidden">{{ __('messages.admin_sidebar.reports_tools') }}</div>

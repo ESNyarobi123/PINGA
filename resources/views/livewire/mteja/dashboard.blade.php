@@ -1,4 +1,6 @@
 <div wire:init="loadData">
+    <livewire:shared.announcement-modal scope="mteja" />
+
     {{-- Compact Welcome Header --}}
     <div class="mb-6">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">

@@ -1,4 +1,6 @@
 <div wire:init="loadData" wire:poll.30s="loadData">
+    <livewire:shared.announcement-modal scope="winga" />
+
     {{-- Welcome Banner --}}
     <div class="bg-gradient-to-r from-winga-600 to-winga-500 rounded-2xl p-4 mb-8 text-white relative overflow-hidden">
         <div class="absolute top-0 right-0 -mt-4 -mr-4 opacity-10">

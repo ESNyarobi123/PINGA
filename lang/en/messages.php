@@ -1152,6 +1152,73 @@ return [
         'audit_logs' => 'Audit Logs',
         'settings' => 'Settings',
         'reports_tools' => 'REPORTS & TOOLS',
+        'announcements' => 'Announcements',
+    ],
+
+    // Admin - Site Announcements
+    'admin_matangazo' => [
+        'title' => 'Announcements',
+        'subtitle' => 'Post announcements to the welcome page, mteja and winga dashboards.',
+        'new' => 'New Announcement',
+        'empty' => 'No announcements yet. Click "New Announcement" to start.',
+        'create_title' => 'New Announcement',
+        'edit_title' => 'Edit Announcement',
+        'edit' => 'Edit',
+        'delete' => 'Delete',
+        'activate' => 'Enable',
+        'deactivate' => 'Disable',
+        'disabled' => 'Disabled',
+        'confirm_delete' => 'Are you sure you want to delete this announcement?',
+        'created' => 'Announcement published.',
+        'updated' => 'Announcement saved.',
+        'toggled' => 'Announcement status updated.',
+        'deleted' => 'Announcement deleted.',
+        'cancel' => 'Cancel',
+        'save' => 'Save',
+        'publish' => 'Publish',
+        'from' => 'From',
+        'until' => 'Until',
+        'min_view' => 'min view',
+        'not_dismissible' => 'Not dismissible',
+        'fields' => [
+            'title' => 'Title',
+            'body' => 'Body',
+            'type' => 'Type',
+            'audiences' => 'Audience (who sees it)',
+            'cta_label' => 'Button label (optional)',
+            'cta_url' => 'Button URL (optional)',
+            'starts_at' => 'Starts at (optional)',
+            'ends_at' => 'Ends at (optional)',
+            'min_view_seconds' => 'Minimum seconds before user can dismiss',
+            'is_active' => 'Active',
+            'is_dismissible' => 'User can dismiss',
+        ],
+        'types' => [
+            'info' => '💡 Info',
+            'success' => '✅ Success',
+            'warning' => '⚠️ Warning',
+            'danger' => '🚨 Danger',
+        ],
+        'audiences' => [
+            'public' => 'Welcome Page',
+            'mteja' => 'Mteja Dashboard',
+            'winga' => 'Winga Dashboard',
+        ],
+        'placeholders' => [
+            'cta_label' => 'e.g. Learn more',
+        ],
+        'help' => [
+            'min_view_seconds' => 'For modals — 0 means user can dismiss immediately. Use 3–5 for important messages.',
+            'timezone' => 'Times are entered in Tanzania local time (EAT, UTC+3).',
+        ],
+        'errors' => [
+            'audience_required' => 'Please pick at least one audience (welcome, mteja, or winga).',
+        ],
+    ],
+
+    'announcement' => [
+        'got_it' => 'Got it',
+        'wait' => 'Wait',
     ],
 
     // Mteja (Client) Sidebar

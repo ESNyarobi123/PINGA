@@ -141,6 +141,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/maombi-kutoa', \App\Livewire\Admin\MaombiKutoa::class)->name('maombi-kutoa');
         Route::get('/subscriptions', \App\Livewire\Admin\Subscriptions::class)->name('subscriptions');
         Route::get('/subscription-plans', \App\Livewire\Admin\SubscriptionPlans::class)->name('subscription-plans');
+        Route::get('/matangazo', \App\Livewire\Admin\Matangazo::class)->name('matangazo');
         Route::get('/settings', \App\Livewire\Admin\Settings::class)->name('settings');
         Route::get('/audit-logs', \App\Livewire\Admin\AuditLogs::class)->name('audit-logs');
 
