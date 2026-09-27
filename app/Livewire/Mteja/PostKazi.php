@@ -3,8 +3,10 @@
 namespace App\Livewire\Mteja;
 
 use App\Jobs\TranslateJobPosting;
+use App\Models\Category;
 use App\Models\Job;
 use App\Services\OpenStreetMapGeocodingService;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class PostKazi extends Component
@@ -29,18 +31,36 @@ class PostKazi extends Component
 
     public string $duration = '';
 
-    protected array $rules = [
-        'title' => 'required|string|min:5|max:200',
-        'description' => 'required|string|min:20',
-        'category_id' => 'required',
-        'location' => 'required|string',
-        'budget_min' => 'required|integer|min:1000',
-    ];
+    protected function rules(): array
+    {
+        return [
+            'title' => [
+                'required', 'string', 'min:5', 'max:200',
+                function ($attribute, $value, $fail) {
+                    if (Job::containsPhoneNumber($value)) {
+                        $fail('Tafadhali usiandike namba ya simu kwenye kichwa cha kazi.');
+                    }
+                },
+            ],
+            'description' => [
+                'required', 'string', 'min:20',
+                function ($attribute, $value, $fail) {
+                    if (Job::containsPhoneNumber($value)) {
+                        $fail('Tafadhali usiandike namba ya simu kwenye maelezo. Namba ya simu itaonyeshwa kwa mteja baada ya malipo.');
+                    }
+                },
+            ],
+            'category_id' => ['required', Rule::exists('categories', 'id')->where('is_active', true)],
+            'location' => 'required|string',
+            'budget_min' => 'required|integer|min:1000',
+        ];
+    }
 
     protected array $messages = [
         'title.required' => 'Jina la kazi linahitajika',
         'description.required' => 'Maelezo ya kazi yanahitajika',
         'category_id.required' => 'Chagua kategoria',
+        'category_id.exists' => 'Kategoria uliyochagua haipatikani au imezimwa',
         'location.required' => 'Eneo linahitajika',
         'budget_min.required' => 'Bajeti ya chini inahitajika',
     ];
@@ -48,12 +68,6 @@ class PostKazi extends Component
     public function submit(): void
     {
         $this->validate();
-
-        if (Job::containsPhoneNumber($this->description) || Job::containsPhoneNumber($this->title)) {
-            $this->addError('description', 'Tafadhali usiandike namba ya simu kwenye maelezo. Namba ya simu itaonyeshwa kwa mteja baada ya malipo.');
-
-            return;
-        }
 
         $job = Job::create([
             'employer_id' => auth()->id(),
@@ -80,7 +94,10 @@ class PostKazi extends Component
 
     public function render()
     {
-        $categories = \App\Models\Category::all();
+        $categories = Category::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
         return view('livewire.mteja.post-kazi', compact('categories'))
             ->layout('layouts.mteja')

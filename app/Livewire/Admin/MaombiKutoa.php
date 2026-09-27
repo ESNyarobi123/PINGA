@@ -2,11 +2,10 @@
 
 namespace App\Livewire\Admin;
 
-use App\Jobs\RetryFailedPayout;
-use App\Models\Payment;
-use App\Models\WithdrawalRequest;
-use App\Models\User;
 use App\Models\AdminAuditLog;
+use App\Models\Payment;
+use App\Models\User;
+use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
 use App\Services\SnippePayoutService;
 use Illuminate\Support\Facades\Log;
@@ -18,21 +17,31 @@ class MaombiKutoa extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $filterStatus = '';
+
     public string $filterPayoutStatus = '';
+
     public string $filterNetwork = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public string $sortBy = 'created_at';
+
     public string $sortDirection = 'desc';
 
     // Bulk actions
     public array $selectedRequests = [];
+
     public bool $selectAll = false;
+
     public string $bulkAction = '';
 
     // Individual actions
     public string $rejectionReason = '';
+
     public ?int $selectedRequestId = null;
 
     protected $queryString = [
@@ -84,23 +93,23 @@ class MaombiKutoa extends Component
     private function getWithdrawalRequestsQuery()
     {
         return WithdrawalRequest::query()
-            ->with(['user:id,name,phone,whatsapp,avatar,wallet_balance'])
-            ->when($this->search, fn($query) => $query
+            ->with(['user:id,name,phone,email,role,whatsapp,avatar,wallet_balance'])
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->whereHas('user', fn($sub) => $sub
-                        ->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('phone', 'like', '%' . $this->search . '%')
-                        ->orWhere('email', 'like', '%' . $this->search . '%')
+                    $q->whereHas('user', fn ($sub) => $sub
+                        ->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('phone', 'like', '%'.$this->search.'%')
+                        ->orWhere('email', 'like', '%'.$this->search.'%')
                     )
-                    ->orWhere('account_number', 'like', '%' . $this->search . '%')
-                    ->orWhere('payout_reference', 'like', '%' . $this->search . '%');
+                        ->orWhere('account_number', 'like', '%'.$this->search.'%')
+                        ->orWhere('payout_reference', 'like', '%'.$this->search.'%');
                 })
             )
-            ->when($this->filterStatus, fn($query) => $query->where('status', $this->filterStatus))
-            ->when($this->filterPayoutStatus, fn($query) => $query->where('payout_status', $this->filterPayoutStatus))
-            ->when($this->filterNetwork, fn($query) => $query->where('network', $this->filterNetwork))
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->filterStatus, fn ($query) => $query->where('status', $this->filterStatus))
+            ->when($this->filterPayoutStatus, fn ($query) => $query->where('payout_status', $this->filterPayoutStatus))
+            ->when($this->filterNetwork, fn ($query) => $query->where('network', $this->filterNetwork))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->orderBy($this->sortBy, $this->sortDirection);
     }
 
@@ -155,7 +164,7 @@ class MaombiKutoa extends Component
             'name' => $req->user?->name ?? 'Mfanyakazi',
             'network' => $req->network ?? $snippe->detectNetwork($req->account_number ?? ''),
             'narration' => 'Retry: Kutoa pesa - Winga Platform',
-            'idempotency_key' => 'admin-retry-' . $id . '-' . now()->timestamp,
+            'idempotency_key' => 'admin-retry-'.$id.'-'.now()->timestamp,
             'metadata' => [
                 'type' => 'withdrawal',
                 'user_id' => $req->user_id,
@@ -180,7 +189,7 @@ class MaombiKutoa extends Component
             $this->dispatch('toast', message: 'Payout retry initiated successfully', type: 'success');
         } else {
             Log::error("Admin retryWithdrawal {$id} failed", $result);
-            $this->dispatch('toast', message: 'Retry failed: ' . ($result['error'] ?? 'Unknown error'), type: 'error');
+            $this->dispatch('toast', message: 'Retry failed: '.($result['error'] ?? 'Unknown error'), type: 'error');
         }
     }
 
@@ -193,8 +202,8 @@ class MaombiKutoa extends Component
             'amount' => (int) $payment->worker_amount,
             'phone' => $payment->worker->phone,
             'name' => $payment->worker->name,
-            'narration' => 'Retry Admin: Malipo ya kazi #' . $payment->job_id,
-            'idempotency_key' => 'admin-retry-pay-' . $paymentId . '-' . now()->timestamp,
+            'narration' => 'Retry Admin: Malipo ya kazi #'.$payment->job_id,
+            'idempotency_key' => 'admin-retry-pay-'.$paymentId.'-'.now()->timestamp,
             'metadata' => [
                 'type' => 'payout',
                 'job_id' => $payment->job_id,
@@ -205,7 +214,7 @@ class MaombiKutoa extends Component
 
         if ($result['success']) {
             $payment->update([
-                'payout_reference' => $result['reference'], 
+                'payout_reference' => $result['reference'],
                 'payout_status' => 'processing',
                 'retry_count' => ($payment->retry_count ?? 0) + 1,
                 'last_retry_at' => now(),
@@ -219,14 +228,14 @@ class MaombiKutoa extends Component
 
             $this->dispatch('toast', message: 'Job payout retry initiated', type: 'success');
         } else {
-            $this->dispatch('toast', message: 'Retry failed: ' . ($result['error'] ?? 'Unknown error'), type: 'error');
+            $this->dispatch('toast', message: 'Retry failed: '.($result['error'] ?? 'Unknown error'), type: 'error');
         }
     }
 
     public function approveWithdrawal(int $id): void
     {
         $req = WithdrawalRequest::with('user')->findOrFail($id);
-        
+
         $req->update([
             'status' => 'approved',
             'approved_at' => now(),
@@ -263,20 +272,33 @@ class MaombiKutoa extends Component
             return;
         }
 
-        // Return funds to user wallet
-        $req->user->increment('wallet_balance', $req->amount);
-        
+        // Return funds to user wallet (including fee if employer/mteja was charged fee)
+        $refundAmount = (float) $req->amount + (float) ($req->charge_amount ?? 0);
+        $req->user->increment('wallet_balance', $refundAmount);
+
+        // Mark corresponding withdrawal debit transaction as failed so it does not count in totalWithdrawn
+        \App\Models\Transaction::where('user_id', $req->user_id)
+            ->where(function ($q) use ($req) {
+                $q->where('reference', 'WD-'.$req->id)
+                    ->orWhere(function ($sub) use ($req) {
+                        $sub->where('type', 'withdrawal')
+                            ->where('status', 'processing')
+                            ->where('amount', $req->amount);
+                    });
+            })
+            ->update(['status' => 'failed']);
+
         // Create refund transaction record for audit trail
         \App\Models\Transaction::create([
             'user_id' => $req->user_id,
             'type' => 'credit',
-            'amount' => $req->amount,
-            'description' => 'Refund: Withdrawal rejected by admin - ' . ($reason ?: 'No reason provided'),
+            'amount' => $refundAmount,
+            'description' => 'Refund: Ombi la kutoa pesa limekataliwa'.($reason ? ' - Sababu: '.$reason : ''),
             'balance_after' => $req->user->fresh()->wallet_balance,
-            'reference' => 'admin-reject-' . $req->id . '-' . now()->timestamp,
+            'reference' => 'admin-reject-'.$req->id.'-'.now()->timestamp,
             'status' => 'completed',
         ]);
-        
+
         $req->update([
             'status' => 'rejected',
             'payout_status' => 'failed',
@@ -285,14 +307,24 @@ class MaombiKutoa extends Component
             'processed_by' => auth()->id(),
         ]);
 
-        // Notify user
+        // Route appropriately based on user role
+        $isClient = in_array(strtolower($req->user?->role ?? ''), ['client', 'mteja']);
+        $actionUrl = $isClient ? route('mteja.wallet') : route('winga.tomba-ombi');
+
+        // Notify user with reason included
+        $message = 'Ombi lako la kutoa TZS '.number_format($req->amount).' limekataliwa.';
+        if ($reason) {
+            $message .= ' Sababu: '.$reason.'.';
+        }
+        $message .= ' Salio la TZS '.number_format($refundAmount).' limerudishwa kwenye wallet yako.';
+
         $req->user->notify(new WingaNotification(
-            title: 'Withdrawal Request Rejected',
-            message: 'Your withdrawal request for TZS ' . number_format($req->amount) . ' has been rejected. Amount returned to wallet.',
+            title: 'Ombi la Kutoa Pesa Limekataliwa',
+            message: $message,
             icon: 'x-circle',
             color: 'red',
-            action_url: route('winga.tomba-ombi'),
-            action_label: 'View Wallet',
+            action_url: $actionUrl,
+            action_label: 'Angalia Wallet',
         ));
 
         $this->logAdminAction('reject_withdrawal', $req, [
@@ -313,7 +345,7 @@ class MaombiKutoa extends Component
     public function markAsCompleted(int $id): void
     {
         $req = WithdrawalRequest::findOrFail($id);
-        
+
         $req->update([
             'status' => 'paid',
             'payout_status' => 'completed',
@@ -329,49 +361,102 @@ class MaombiKutoa extends Component
         $this->dispatch('toast', message: 'Withdrawal marked as completed', type: 'success');
     }
 
-    public function executeBulkAction(): void
+    public function executeBulkAction()
     {
         $this->validate([
-            'bulkAction' => 'required|in:approve,reject,retry',
+            'bulkAction' => 'required|in:approve,reject,retry,export',
             'selectedRequests' => 'required|array|min:1',
         ]);
 
-        $requests = WithdrawalRequest::whereIn('id', $this->selectedRequests)->get();
-        $count = 0;
+        $requests = WithdrawalRequest::whereIn('id', $this->selectedRequests)->with('user')->get();
+
+        if ($this->bulkAction === 'export') {
+            $this->reset(['selectedRequests', 'selectAll', 'bulkAction']);
+
+            return $this->exportRequestsList($requests, 'selected_withdrawals_');
+        }
 
         match ($this->bulkAction) {
-            'approve' => $requests->each(fn($req) => $this->approveWithdrawal($req->id)),
-            'reject' => $requests->each(fn($req) => $this->rejectWithdrawal($req->id, 'Bulk rejection')),
-            'retry' => $requests->each(fn($req) => $this->retryWithdrawal($req->id)),
+            'approve' => $requests->each(fn ($req) => $this->approveWithdrawal($req->id)),
+            'reject' => $requests->each(fn ($req) => $this->rejectWithdrawal($req->id, 'Bulk rejection')),
+            'retry' => $requests->each(fn ($req) => $this->retryWithdrawal($req->id)),
         };
 
         $this->dispatch('toast', message: "Action executed on {$requests->count()} requests", type: 'success');
         $this->reset(['selectedRequests', 'selectAll', 'bulkAction']);
     }
 
-    public function exportWithdrawals(): void
+    public function exportWithdrawals()
     {
-        $requests = WithdrawalRequest::with(['user'])->get();
-        
-        $csv = "ID,User Name,Phone,Amount,Network,Status,Payout Status,Reference,Created At,Processed At\n";
-        
-        foreach ($requests as $req) {
-            $csv .= sprintf(
-                "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                $req->id,
-                str_replace(',', '', $req->user->name),
-                $req->account_number,
-                $req->amount,
-                $req->network ?? '',
-                $req->status,
-                $req->payout_status,
-                $req->payout_reference ?? '',
-                $req->created_at->format('Y-m-d H:i'),
-                $req->processed_at?->format('Y-m-d H:i') ?? ''
-            );
-        }
+        $requests = $this->getWithdrawalRequestsQuery()->get();
 
-        $this->dispatch('download', data: $csv, filename: 'withdrawal_requests_export.csv');
+        $this->logAdminAction('export_withdrawals', null, [
+            'count' => $requests->count(),
+        ]);
+
+        return $this->exportRequestsList($requests, 'withdrawal_requests_');
+    }
+
+    private function exportRequestsList($requests, string $prefix = 'withdrawal_requests_')
+    {
+        $filename = $prefix.now()->format('Y-m-d_His').'.csv';
+
+        return response()->streamDownload(function () use ($requests) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'ID',
+                'Recipient Name',
+                'User Role',
+                'Phone / Account Number',
+                'Network / Provider',
+                'Method',
+                'Amount to Pay (TZS)',
+                'Charge / Fee (TZS)',
+                'Net Amount (TZS)',
+                'Request Status',
+                'Payout Status',
+                'Payout Reference',
+                'Bank Name',
+                'Account Name',
+                'Admin Note / Rejection Reason',
+                'Request Date',
+                'Processed Date',
+            ]);
+
+            foreach ($requests as $req) {
+                $phone = $req->account_number ?: ($req->phone ?: ($req->user?->phone ?? ''));
+                $recipientName = $req->account_name ?: ($req->user?->name ?? 'N/A');
+                $role = ucfirst($req->user?->role ?? 'N/A');
+                $network = $req->methodLabel();
+
+                fputcsv($handle, [
+                    $req->id,
+                    $recipientName,
+                    $role,
+                    $phone,
+                    $network,
+                    $req->method ?? 'N/A',
+                    $req->amount,
+                    $req->charge_amount ?? 0,
+                    $req->net_amount ?: $req->amount,
+                    $req->status,
+                    $req->payout_status,
+                    $req->payout_reference ?? '',
+                    $req->bank_name ?? '',
+                    $req->account_name ?? '',
+                    $req->admin_note ?? '',
+                    $req->created_at?->format('Y-m-d H:i:s') ?? '',
+                    $req->processed_at?->format('Y-m-d H:i:s') ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     public function getWithdrawalStats(WithdrawalRequest $request): array
@@ -386,15 +471,15 @@ class MaombiKutoa extends Component
         ];
     }
 
-    private function logAdminAction(string $action, $model, array $changes = []): void
+    private function logAdminAction(string $action, $model = null, array $changes = []): void
     {
         AdminAuditLog::create([
             'admin_id' => auth()->id(),
             'action' => $action,
-            'model_type' => get_class($model),
-            'model_id' => $model->id,
+            'model_type' => $model ? get_class($model) : null,
+            'model_id' => $model?->id,
             'old_values' => $changes['old'] ?? null,
-            'new_values' => $changes['new'] ?? null,
+            'new_values' => $changes['new'] ?? (isset($changes['old']) ? null : $changes),
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
         ]);

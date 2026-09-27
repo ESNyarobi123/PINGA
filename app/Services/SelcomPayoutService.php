@@ -21,10 +21,10 @@ class SelcomPayoutService
 
     public function __construct()
     {
-        $this->apiKey    = config('services.selcom.api_key', '');
+        $this->apiKey = config('services.selcom.api_key', '');
         $this->apiSecret = config('services.selcom.api_secret', '');
-        $this->vendor    = config('services.selcom.vendor', 'WINGA');
-        $this->baseUrl   = config('services.selcom.base_url', 'https://apigw.selcommobile.com/v1');
+        $this->vendor = config('services.selcom.vendor', 'WINGA');
+        $this->baseUrl = config('services.selcom.base_url', 'https://apigw.selcommobile.com/v1');
     }
 
     /**
@@ -35,12 +35,12 @@ class SelcomPayoutService
         $digest = base64_encode(hash_hmac('sha256', $timestamp, $this->apiSecret, true));
 
         return [
-            'Authorization' => 'SELCOM ' . base64_encode($this->apiKey),
+            'Authorization' => 'SELCOM '.base64_encode($this->apiKey),
             'Digest-Method' => 'HS256',
-            'Digest'        => $digest,
-            'Timestamp'     => $timestamp,
-            'Content-Type'  => 'application/json',
-            'Accept'        => 'application/json',
+            'Digest' => $digest,
+            'Timestamp' => $timestamp,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
         ];
     }
 
@@ -56,11 +56,11 @@ class SelcomPayoutService
         }
 
         if (str_starts_with($phone, '0') && strlen($phone) === 10) {
-            return '255' . substr($phone, 1);
+            return '255'.substr($phone, 1);
         }
 
         if (strlen($phone) === 9) {
-            return '255' . $phone;
+            return '255'.$phone;
         }
 
         return $phone;
@@ -81,20 +81,20 @@ class SelcomPayoutService
     public function sendPayout(array $data): array
     {
         $formattedPhone = $this->formatPhone($data['phone']);
-        $timestamp      = now()->format('Y-m-d\TH:i:sP');
+        $timestamp = now()->format('Y-m-d\TH:i:sP');
 
         $payload = [
-            'vendor'    => $this->vendor,
-            'msisdn'    => $formattedPhone,
-            'amount'    => (int) $data['amount'],
+            'vendor' => $this->vendor,
+            'msisdn' => $formattedPhone,
+            'amount' => (int) $data['amount'],
             'reference' => $data['reference'],
             'narration' => $data['narration'] ?? 'Winga Platform Payout',
         ];
 
         Log::info('Selcom Payout Request', [
             'reference' => $data['reference'],
-            'amount'    => $payload['amount'],
-            'phone'     => $formattedPhone,
+            'amount' => $payload['amount'],
+            'phone' => $formattedPhone,
         ]);
 
         try {
@@ -105,28 +105,28 @@ class SelcomPayoutService
             $result = $response->json() ?? [];
 
             Log::info('Selcom Payout Response', [
-                'status'   => $response->status(),
+                'status' => $response->status(),
                 'response' => $result,
             ]);
 
             if ($response->successful() && ($result['resultcode'] ?? '') === '000') {
                 return [
-                    'success'   => true,
+                    'success' => true,
                     'reference' => $result['transid'] ?? $data['reference'],
-                    'data'      => $result,
+                    'data' => $result,
                 ];
             }
 
             Log::error('Selcom Payout API Error', [
-                'status'  => $response->status(),
-                'body'    => $response->body(),
+                'status' => $response->status(),
+                'body' => $response->body(),
                 'payload' => $payload,
             ]);
 
             return [
                 'success' => false,
-                'error'   => $result['message'] ?? $result['resultcode'] ?? 'Selcom payout failed',
-                'data'    => $result,
+                'error' => $result['message'] ?? $result['resultcode'] ?? 'Selcom payout failed',
+                'data' => $result,
             ];
         } catch (\Exception $e) {
             Log::error('Selcom Payout Exception', [
@@ -136,7 +136,7 @@ class SelcomPayoutService
 
             return [
                 'success' => false,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -175,12 +175,13 @@ class SelcomPayoutService
         Log::info('Selcom Payout Webhook', ['payload' => $payload]);
 
         $resultCode = $payload['resultcode'] ?? $payload['result_code'] ?? '';
-        $reference  = $payload['reference'] ?? $payload['order_id'] ?? null;
-        $transId    = $payload['transid'] ?? $payload['transaction_id'] ?? null;
-        $amount     = (float) ($payload['amount'] ?? 0);
+        $reference = $payload['reference'] ?? $payload['order_id'] ?? null;
+        $transId = $payload['transid'] ?? $payload['transaction_id'] ?? null;
+        $amount = (float) ($payload['amount'] ?? 0);
 
         if (! $reference) {
             Log::warning('Selcom Webhook: no reference found', $payload);
+
             return;
         }
 
@@ -190,6 +191,7 @@ class SelcomPayoutService
 
         if (! $withdrawal) {
             Log::warning("Selcom Webhook: withdrawal not found for ref {$reference}");
+
             return;
         }
 
@@ -206,16 +208,16 @@ class SelcomPayoutService
     protected function handlePayoutCompleted(WithdrawalRequest $withdrawal, string $reference, float $amount): void
     {
         $withdrawal->update([
-            'status'           => 'paid',
-            'payout_status'    => 'completed',
+            'status' => 'paid',
+            'payout_status' => 'completed',
             'payout_reference' => $reference,
-            'processed_at'     => now(),
+            'processed_at' => now(),
         ]);
 
         $worker = $withdrawal->user;
         $worker?->notify(new WingaNotification(
             title: '💸 Pesa Imefika!',
-            message: 'Umepokea TZS ' . number_format($amount) . ' kwenye simu yako kupitia Selcom. Asante kwa kutumia Winga!',
+            message: 'Umepokea TZS '.number_format($amount).' kwenye simu yako kupitia Selcom. Asante kwa kutumia Winga!',
             icon: 'banknotes',
             color: 'green',
             action_url: route('winga.tomba-ombi'),
@@ -235,30 +237,42 @@ class SelcomPayoutService
         }
 
         $withdrawal->update([
-            'status'           => 'rejected',
-            'payout_status'    => 'failed',
+            'status' => 'rejected',
+            'payout_status' => 'failed',
             'payout_reference' => $reference,
-            'admin_note'       => 'Selcom payout failed automatically.',
-            'processed_at'     => now(),
+            'admin_note' => 'Selcom payout failed automatically.',
+            'processed_at' => now(),
         ]);
 
         $worker = $withdrawal->user;
         if ($worker) {
-            $worker->increment('wallet_balance', $withdrawal->amount);
+            $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
+            $worker->increment('wallet_balance', $refundAmount);
+
+            Transaction::where('user_id', $worker->id)
+                ->where(function ($q) use ($withdrawal) {
+                    $q->where('reference', 'WD-'.$withdrawal->id)
+                        ->orWhere(function ($sub) use ($withdrawal) {
+                            $sub->where('type', 'withdrawal')
+                                ->where('status', 'processing')
+                                ->where('amount', $withdrawal->amount);
+                        });
+                })
+                ->update(['status' => 'failed']);
 
             Transaction::create([
-                'user_id'       => $worker->id,
-                'type'          => 'credit',
-                'amount'        => $withdrawal->amount,
-                'description'   => 'Refund: Selcom payout failed — ' . $reference,
+                'user_id' => $worker->id,
+                'type' => 'credit',
+                'amount' => $refundAmount,
+                'description' => 'Refund: Selcom payout failed — '.$reference,
                 'balance_after' => $worker->fresh()->wallet_balance,
-                'status'        => 'completed',
-                'reference'     => 'refund-selcom-' . $reference,
+                'status' => 'completed',
+                'reference' => 'refund-selcom-'.$reference,
             ]);
 
             $worker->notify(new WingaNotification(
                 title: '⚠️ Tatizo la Malipo',
-                message: 'Kulikuwa na tatizo na malipo yako ya TZS ' . number_format($amount) . '. Fedha imerudishwa kwenye wallet yako. Jaribu tena.',
+                message: 'Kulikuwa na tatizo na malipo yako ya TZS '.number_format($amount).'. Fedha imerudishwa kwenye wallet yako. Jaribu tena.',
                 icon: 'exclamation-triangle',
                 color: 'red',
                 action_url: route('winga.tomba-ombi'),
@@ -270,7 +284,7 @@ class SelcomPayoutService
         foreach ($admins as $admin) {
             $admin->notify(new WingaNotification(
                 title: '🚨 Selcom Payout Imeshindwa',
-                message: "Payout {$reference} ya TZS " . number_format($amount) . " imeshindwa kupitia Selcom.",
+                message: "Payout {$reference} ya TZS ".number_format($amount).' imeshindwa kupitia Selcom.',
                 icon: 'x-circle',
                 color: 'red',
                 action_url: route('admin.maombi-kutoa'),

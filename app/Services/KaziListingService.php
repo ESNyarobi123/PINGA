@@ -16,6 +16,10 @@ class KaziListingService
         $query = Job::query()
             ->where('status', 'open')
             ->where('is_approved', true)
+            ->where(function ($q) {
+                $q->whereNull('category_id')
+                    ->orWhereHas('category', fn ($c) => $c->where('is_active', true));
+            })
             ->withCount('applications')
             ->with(['employer', 'category', 'skills']);
 
@@ -30,7 +34,7 @@ class KaziListingService
 
         if (! empty($params['category'])) {
             $category = $params['category'];
-            $query->whereHas('category', fn ($q) => $q->where('slug', $category)->orWhere('id', $category));
+            $query->whereHas('category', fn ($q) => $q->where('is_active', true)->where(fn ($sub) => $sub->where('slug', $category)->orWhere('id', $category)));
         }
 
         if (! empty($params['location'])) {

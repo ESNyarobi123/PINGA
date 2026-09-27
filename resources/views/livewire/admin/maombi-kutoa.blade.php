@@ -123,22 +123,46 @@
                 <input wire:model.live="dateTo" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
             </div>
 
-            <button wire:click="exportWithdrawals"
-                    class="px-4 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition">
-                📤 {{ __('messages.admin_withdrawals.export_csv') }}
+            <button type="button" 
+                    wire:click="exportWithdrawals"
+                    wire:loading.attr="disabled"
+                    wire:target="exportWithdrawals"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition shadow-sm cursor-pointer shrink-0">
+                <span wire:loading.remove wire:target="exportWithdrawals" class="inline-flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {{ __('messages.admin_withdrawals.export_csv') }}
+                </span>
+                <span wire:loading wire:target="exportWithdrawals" class="inline-flex items-center gap-2">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ __('Inapakua...') }}
+                </span>
             </button>
         </div>
 
         <div class="flex items-center justify-between mt-4">
-            <div class="flex items-center gap-4">
-                <select wire:model.live="bulkAction" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+            <div class="flex items-center gap-3">
+                <select wire:model.live="bulkAction" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                     <option value="">{{ __('messages.admin_withdrawals.bulk_actions') }}</option>
+                    <option value="export">📥 {{ __('Pakua Zilizochaguliwa (Export CSV)') }}</option>
                     <option value="approve">✅ {{ __('messages.admin_withdrawals.approve') }}</option>
                     <option value="reject">❌ {{ __('messages.admin_withdrawals.reject') }}</option>
                     <option value="retry">🔄 {{ __('messages.admin_withdrawals.retry') }}</option>
                 </select>
+
+                @if($bulkAction && count($selectedRequests) > 0)
+                <button type="button" 
+                        wire:click="executeBulkAction" 
+                        class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition cursor-pointer">
+                    {{ __('Tekeleza') }} ({{ count($selectedRequests) }})
+                </button>
+                @endif
                 
-                <label class="flex items-center gap-2 text-sm">
+                <label class="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                     <input type="checkbox" wire:model.live="selectAll" class="rounded">
                     <span>{{ __('messages.admin_withdrawals.select_all') }} ({{ $requests->total() }})</span>
                 </label>
@@ -242,7 +266,7 @@
                                     {{ ucfirst($request->status) }}
                                 </span>
                                 @if($request->admin_note)
-                                <p class="text-xs text-zinc-500">{{ Str::limit($request->admin_note, 30) }}</p>
+                                <p class="text-xs text-zinc-500 max-w-[200px] break-words" title="{{ $request->admin_note }}">{{ $request->admin_note }}</p>
                                 @endif
                             </div>
                         </td>

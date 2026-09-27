@@ -99,6 +99,12 @@
                                 <div>
                                     <p class="font-medium text-zinc-900 dark:text-white">{{ $transaction->description ?? 'Transaction' }}</p>
                                     <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $transaction->created_at->diffForHumans() }}</p>
+                                    @if(str_contains(strtolower($transaction->description ?? ''), 'rejected') || str_contains(strtolower($transaction->description ?? ''), 'limekataliwa') || str_contains($transaction->reference ?? '', 'admin-reject-'))
+                                    <div class="mt-2 p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded text-xs text-red-700 dark:text-red-300">
+                                        <span class="font-semibold">Sababu:</span>
+                                        {{ Str::after($transaction->description, 'Sababu: ') ?: $transaction->description }}
+                                    </div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="text-right">

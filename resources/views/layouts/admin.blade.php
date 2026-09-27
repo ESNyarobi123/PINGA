@@ -125,6 +125,23 @@
                     const message = data?.message ?? 'OK';
                     window.alert(message);
                 });
+
+                Livewire.on('download', (payload) => {
+                    const data = Array.isArray(payload) ? payload[0] : payload;
+                    const content = data?.data ?? '';
+                    const filename = data?.filename ?? 'export.csv';
+                    const isJson = filename.endsWith('.json');
+                    const mimeType = isJson ? 'application/json;charset=utf-8;' : 'text/csv;charset=utf-8;';
+                    const blob = new Blob([content], { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                });
             });
         </script>
         @stack('scripts')

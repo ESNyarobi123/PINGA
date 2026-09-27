@@ -43,10 +43,18 @@ class WingaProfile extends Component
             ->where('onboarding_completed', true)
             ->with([
                 'skills',
-                'portfolios',
+                'portfolios' => fn ($q) => $q->where(function ($sq) {
+                    $sq->whereNull('category_id')
+                        ->orWhereHas('category', fn ($c) => $c->where('is_active', true));
+                }),
                 'reviewsReceived.reviewer',
                 'activeSubscription.subscriptionPlan',
-                'services' => fn ($q) => $q->where('status', 'active')->with($servicesWith)->orderBy('title'),
+                'services' => fn ($q) => $q->where('status', 'active')
+                    ->where(function ($sq) {
+                        $sq->whereNull('category_id')
+                            ->orWhereHas('category', fn ($c) => $c->where('is_active', true));
+                    })
+                    ->with($servicesWith)->orderBy('title'),
             ])
             ->withAvg('reviewsReceived', 'rating')
             ->withCount('reviewsReceived')

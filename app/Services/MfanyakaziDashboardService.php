@@ -23,17 +23,57 @@ class MfanyakaziDashboardService
 
         $kaziZilizomalika = Job::where('hired_worker_id', $workerId)->where('status', 'completed')->count();
 
+        $isNotRefund = function ($query) {
+            $query->whereNotNull('payment_id')
+                ->orWhere(function ($sub) {
+                    $sub->where('description', 'not like', '%efund%')
+                        ->where('description', 'not like', '%kataliwa%')
+                        ->where('description', 'not like', '%ghairiwa%')
+                        ->where(function ($ref) {
+                            $ref->whereNull('reference')
+                                ->orWhere(function ($r) {
+                                    $r->where('reference', 'not like', '%reject%')
+                                        ->where('reference', 'not like', '%refund%');
+                                });
+                        });
+                });
+        };
+
         $mapatoJumla = (float) Payment::where('worker_id', $workerId)
             ->where('status', 'released')
             ->sum('worker_amount');
 
+        if ($mapatoJumla == 0) {
+            $mapatoJumla = (float) Transaction::where('user_id', $workerId)
+                ->where('type', 'credit')
+                ->where('status', 'completed')
+                ->where($isNotRefund)
+                ->sum('amount');
+        }
+
         $weekStart = now()->startOfWeek();
         $maombiWiki = Application::where('worker_id', $workerId)->where('created_at', '>=', $weekStart)->count();
         $kukubaliwaWiki = Application::where('worker_id', $workerId)->where('status', 'accepted')->where('updated_at', '>=', $weekStart)->count();
-        $mapatoWiki = (float) Transaction::where('user_id', $workerId)
-            ->where('type', 'credit')
-            ->where('created_at', '>=', $weekStart)
-            ->sum('amount');
+
+        $mapatoWiki = (float) Payment::where('worker_id', $workerId)
+            ->where('status', 'released')
+            ->where(function ($q) use ($weekStart) {
+                $q->where('escrow_released_at', '>=', $weekStart)
+                    ->orWhere(function ($sub) use ($weekStart) {
+                        $sub->whereNull('escrow_released_at')
+                            ->where('updated_at', '>=', $weekStart);
+                    });
+            })
+            ->sum('worker_amount');
+
+        if ($mapatoWiki == 0 && $mapatoJumla > 0) {
+            $mapatoWiki = (float) Transaction::where('user_id', $workerId)
+                ->where('type', 'credit')
+                ->where('status', 'completed')
+                ->where('created_at', '>=', $weekStart)
+                ->where($isNotRefund)
+                ->sum('amount');
+        }
 
         $recentJobs = Job::where('status', 'open')
             ->where('is_approved', true)
@@ -49,13 +89,13 @@ class MfanyakaziDashboardService
 
         return [
             'stats' => [
-                'kazi_karibu'       => $kaziKaribu,
-                'maombi_active'     => $maombiActive,
+                'kazi_karibu' => $kaziKaribu,
+                'maombi_active' => $maombiActive,
                 'kazi_zilizomalika' => $kaziZilizomalika,
-                'mapato_jumla'      => $mapatoJumla,
-                'maombi_wiki'       => $maombiWiki,
-                'kukubaliwa_wiki'   => $kukubaliwaWiki,
-                'mapato_wiki'       => $mapatoWiki,
+                'mapato_jumla' => $mapatoJumla,
+                'maombi_wiki' => $maombiWiki,
+                'kukubaliwa_wiki' => $kukubaliwaWiki,
+                'mapato_wiki' => $mapatoWiki,
             ],
             'recent_jobs' => $recentJobs,
             'ongoing_job' => $ongoingJob,

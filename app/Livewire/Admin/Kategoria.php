@@ -291,28 +291,38 @@ class Kategoria extends Component
         $this->dispatch('toast', message: 'Categories reordered successfully', type: 'success');
     }
 
-    public function exportCategories(): void
+    public function exportCategories()
     {
         $categories = Category::with(['parent', 'jobs'])->get();
+        $this->logAdminAction('export_categories', null, [
+            'count' => $categories->count(),
+        ]);
+        $filename = 'categories_export_'.now()->format('Y-m-d_His').'.csv';
 
-        $csv = "ID,Name,Description,Parent,Color,Icon,Active,Jobs Count,Created At\n";
+        return response()->streamDownload(function () use ($categories) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['ID', 'Name', 'Description', 'Parent', 'Color', 'Icon', 'Active', 'Jobs Count', 'Created At']);
 
-        foreach ($categories as $category) {
-            $csv .= sprintf(
-                "%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                $category->id,
-                str_replace(',', '', $category->name),
-                str_replace(',', '', $category->description ?? ''),
-                $category->parent?->name ?? '',
-                $category->color ?? '',
-                $category->icon ?? '',
-                $category->is_active ? 'Yes' : 'No',
-                $category->jobs->count(),
-                $category->created_at->format('Y-m-d H:i')
-            );
-        }
+            foreach ($categories as $category) {
+                fputcsv($handle, [
+                    $category->id,
+                    $category->name,
+                    $category->description ?? '',
+                    $category->parent?->name ?? '',
+                    $category->color ?? '',
+                    $category->icon ?? '',
+                    $category->is_active ? 'Yes' : 'No',
+                    $category->jobs->count(),
+                    $category->created_at?->format('Y-m-d H:i') ?? '',
+                ]);
+            }
 
-        $this->dispatch('download', data: $csv, filename: 'categories_export.csv');
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     private function logAdminAction(string $action, $model, array $changes = []): void

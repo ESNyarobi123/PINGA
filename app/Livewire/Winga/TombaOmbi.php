@@ -27,11 +27,11 @@ class TombaOmbi extends Component
 
     public function mount(): void
     {
-        $user        = auth()->user();
+        $user = auth()->user();
         $this->phone = $user->phone ?? '';
 
         // Auto-detect network from phone
-        $snippe        = app(SnippePayoutService::class);
+        $snippe = app(SnippePayoutService::class);
         $this->network = strtolower($snippe->detectNetwork($this->phone));
     }
 
@@ -49,7 +49,7 @@ class TombaOmbi extends Component
 
     public function updatedPhone(): void
     {
-        $snippe        = app(SnippePayoutService::class);
+        $snippe = app(SnippePayoutService::class);
         $this->network = strtolower($snippe->detectNetwork($this->phone));
     }
 
@@ -58,17 +58,17 @@ class TombaOmbi extends Component
         $user = auth()->user();
 
         $this->validate([
-            'amount'  => ['required', 'numeric', 'min:5000', 'max:' . (float) $user->wallet_balance],
-            'phone'   => ['required', 'string', 'min:10'],
+            'amount' => ['required', 'numeric', 'min:5000', 'max:'.(float) $user->wallet_balance],
+            'phone' => ['required', 'string', 'min:10'],
             'network' => ['required', 'in:airtel,vodacom,tigo,halopesa'],
         ], [
             'amount.min' => 'Kiwango cha chini cha kutoa ni TZS 5,000',
-            'amount.max' => 'Hauwezi kutoa zaidi ya salio lako la TZS ' . number_format((float) $user->wallet_balance),
+            'amount.max' => 'Hauwezi kutoa zaidi ya salio lako la TZS '.number_format((float) $user->wallet_balance),
             'phone.required' => 'Namba ya simu inahitajika',
         ]);
 
         $withdrawalAmount = (float) $this->amount;
-        $networkCode      = ucfirst($this->network); // airtel → Airtel, tigo → Tigo
+        $networkCode = ucfirst($this->network); // airtel → Airtel, tigo → Tigo
 
         DB::transaction(function () use ($user, $withdrawalAmount, $networkCode) {
             // 1. Deduct from wallet immediately (held pending payout)
@@ -76,49 +76,50 @@ class TombaOmbi extends Component
 
             // Map network to existing method enum value
             $methodValue = match (strtolower($this->network)) {
-                'airtel'   => 'airtel_money',
-                'vodacom'  => 'mpesa',
-                'tigo'     => 'tigopesa',
-                default    => 'mpesa',
+                'airtel' => 'airtel_money',
+                'vodacom' => 'mpesa',
+                'tigo' => 'tigopesa',
+                default => 'mpesa',
             };
 
             // 2. Create withdrawal record
             $withdrawal = WithdrawalRequest::create([
-                'user_id'        => $user->id,
-                'amount'         => $withdrawalAmount,
-                'method'         => $methodValue,
-                'network'        => $networkCode,
+                'user_id' => $user->id,
+                'amount' => $withdrawalAmount,
+                'method' => $methodValue,
+                'network' => $networkCode,
                 'account_number' => $this->phone,
-                'status'         => 'pending',
-                'payout_status'  => 'processing',
+                'status' => 'pending',
+                'payout_status' => 'processing',
             ]);
 
             // 3. Create debit transaction record
             Transaction::create([
-                'user_id'      => $user->id,
-                'type'         => 'withdrawal',
-                'amount'       => $withdrawalAmount,
-                'description'  => 'Kutoa pesa — ' . $networkCode,
+                'user_id' => $user->id,
+                'type' => 'withdrawal',
+                'amount' => $withdrawalAmount,
+                'description' => 'Kutoa pesa — '.$networkCode,
                 'balance_after' => $user->fresh()->wallet_balance,
-                'status'       => 'processing',
+                'reference' => 'WD-'.$withdrawal->id,
+                'status' => 'processing',
             ]);
 
             // 4. Auto-disburse: try Selcom first, fallback to Snippe
-            $reference = 'W' . $withdrawal->id . 'T' . now()->timestamp;
+            $reference = 'W'.$withdrawal->id.'T'.now()->timestamp;
             $payoutSuccess = false;
 
             // Try Selcom first
             if (config('services.selcom.api_key')) {
                 $selcom = app(SelcomPayoutService::class);
                 $result = $selcom->sendPayout([
-                    'amount'    => (int) $withdrawalAmount,
-                    'phone'     => $this->phone,
-                    'name'      => $user->name,
+                    'amount' => (int) $withdrawalAmount,
+                    'phone' => $this->phone,
+                    'name' => $user->name,
                     'narration' => 'Kutoa pesa - Winga Platform',
                     'reference' => $reference,
-                    'metadata'  => [
-                        'type'          => 'withdrawal',
-                        'user_id'       => $user->id,
+                    'metadata' => [
+                        'type' => 'withdrawal',
+                        'user_id' => $user->id,
                         'withdrawal_id' => $withdrawal->id,
                     ],
                 ]);
@@ -136,15 +137,15 @@ class TombaOmbi extends Component
             if (! $payoutSuccess) {
                 $snippe = app(SnippePayoutService::class);
                 $result = $snippe->sendPayout([
-                    'amount'          => (int) $withdrawalAmount,
-                    'phone'           => $this->phone,
-                    'name'            => $user->name,
-                    'network'         => $networkCode,
-                    'narration'       => 'Kutoa pesa - Winga Platform',
+                    'amount' => (int) $withdrawalAmount,
+                    'phone' => $this->phone,
+                    'name' => $user->name,
+                    'network' => $networkCode,
+                    'narration' => 'Kutoa pesa - Winga Platform',
                     'idempotency_key' => $reference,
-                    'metadata'        => [
-                        'type'          => 'withdrawal',
-                        'user_id'       => $user->id,
+                    'metadata' => [
+                        'type' => 'withdrawal',
+                        'user_id' => $user->id,
                         'withdrawal_id' => $withdrawal->id,
                     ],
                 ]);
@@ -157,7 +158,7 @@ class TombaOmbi extends Component
 
                     $user->notify(new WingaNotification(
                         title: '⏳ Ombi Linashughulikiwa',
-                        message: 'Kuna tatizo la muda na mtoa huduma. Malipo yako ya TZS ' . number_format($withdrawalAmount) . ' yatafanyika ndani ya dakika 30.',
+                        message: 'Kuna tatizo la muda na mtoa huduma. Malipo yako ya TZS '.number_format($withdrawalAmount).' yatafanyika ndani ya dakika 30.',
                         icon: 'clock',
                         color: 'amber',
                         action_url: route('winga.tomba-ombi'),
@@ -170,20 +171,20 @@ class TombaOmbi extends Component
         $displayAmount = $withdrawalAmount;
         $this->showForm = false;
         $this->reset(['amount']);
-        $this->dispatch('toast', message: 'Ombi lako linashughulikiwa. Utapokea TZS ' . number_format($displayAmount) . ' kwenye simu yako hivi karibuni!', type: 'success');
+        $this->dispatch('toast', message: 'Ombi lako linashughulikiwa. Utapokea TZS '.number_format($displayAmount).' kwenye simu yako hivi karibuni!', type: 'success');
     }
 
     public function render()
     {
-        $user     = auth()->user();
-        $balance  = (float) ($user->wallet_balance ?? 0);
+        $user = auth()->user();
+        $balance = (float) ($user->wallet_balance ?? 0);
 
         $requests = WithdrawalRequest::where('user_id', $user->id)
             ->latest()
             ->paginate(10);
 
         return view('livewire.winga.tomba-ombi', [
-            'balance'  => $balance,
+            'balance' => $balance,
             'requests' => $requests,
         ])->layout('layouts.winga')->title('Omba Kutoa Fedha');
     }

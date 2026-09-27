@@ -171,16 +171,19 @@ class Malipo extends Component
     private function getTransactionsQuery()
     {
         return Payment::query()
-            ->with(['employer', 'worker', 'job'])
+            ->with(['employer', 'worker', 'job', 'serviceRequest.service'])
             ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
                     $q->where('payment_reference', 'like', '%'.$this->search.'%')
                         ->orWhereHas('employer', fn ($sub) => $sub->where('name', 'like', '%'.$this->search.'%'))
                         ->orWhereHas('worker', fn ($sub) => $sub->where('name', 'like', '%'.$this->search.'%'))
-                        ->orWhereHas('job', fn ($sub) => $sub->where('title', 'like', '%'.$this->search.'%'));
+                        ->orWhereHas('job', fn ($sub) => $sub->where('title', 'like', '%'.$this->search.'%'))
+                        ->orWhereHas('serviceRequest.service', fn ($sub) => $sub->where('title', 'like', '%'.$this->search.'%'));
                 })
             )
-            ->when($this->filterType, fn ($query) => $query->where('status', $this->filterType))
+            ->when($this->filterType === 'job', fn ($query) => $query->whereNotNull('job_id'))
+            ->when($this->filterType === 'service', fn ($query) => $query->whereNotNull('service_request_id'))
+            ->when($this->filterType && ! in_array($this->filterType, ['job', 'service']), fn ($query) => $query->where('status', $this->filterType))
             ->when($this->filterStatus, fn ($query) => $query->where('status', $this->filterStatus))
             ->when($this->filterMethod, fn ($query) => $query->where('payment_method', $this->filterMethod))
             ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
@@ -360,18 +363,51 @@ class Malipo extends Component
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
 
-        $withdrawal->update(['status' => 'rejected']);
+        if ($withdrawal->status === 'rejected') {
+            $this->dispatch('toast', message: 'Withdrawal already rejected', type: 'warning');
+
+            return;
+        }
+
+        $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
 
         // Refund amount to user's wallet
         if ($withdrawal->user) {
-            $withdrawal->user->increment('wallet_balance', $withdrawal->amount);
+            $withdrawal->user->increment('wallet_balance', $refundAmount);
+
+            \App\Models\Transaction::where('user_id', $withdrawal->user_id)
+                ->where(function ($q) use ($withdrawal) {
+                    $q->where('reference', 'WD-'.$withdrawal->id)
+                        ->orWhere(function ($sub) use ($withdrawal) {
+                            $sub->where('type', 'withdrawal')
+                                ->where('status', 'processing')
+                                ->where('amount', $withdrawal->amount);
+                        });
+                })
+                ->update(['status' => 'failed']);
+
+            \App\Models\Transaction::create([
+                'user_id' => $withdrawal->user_id,
+                'type' => 'credit',
+                'amount' => $refundAmount,
+                'description' => 'Refund: Ombi la kutoa pesa limeghairiwa (#'.$withdrawal->id.')',
+                'balance_after' => $withdrawal->user->fresh()->wallet_balance,
+                'reference' => 'admin-reject-'.$withdrawal->id.'-'.now()->timestamp,
+                'status' => 'completed',
+            ]);
         }
+
+        $withdrawal->update([
+            'status' => 'rejected',
+            'payout_status' => 'failed',
+            'processed_at' => now(),
+        ]);
 
         $this->logAdminAction('cancel_withdrawal', $withdrawal, [
             'amount' => $withdrawal->amount,
         ]);
 
-        $this->dispatch('toast', message: 'Withdrawal cancelled', type: 'success');
+        $this->dispatch('toast', message: 'Withdrawal cancelled and refunded', type: 'success');
     }
 
     public function markWithdrawalPaid(int $withdrawalId): void
@@ -387,26 +423,58 @@ class Malipo extends Component
         $this->dispatch('toast', message: 'Withdrawal marked as paid', type: 'success');
     }
 
-    public function exportTransactions(): void
+    public function exportTransactions()
     {
         $transactions = $this->getTransactionsQuery()->get();
 
-        $csv = "Ref ID,Status,User,Amount,Platform Fee,Payment Method,Date\n";
+        $this->logAdminAction('export_transactions', null, [
+            'count' => $transactions->count(),
+        ]);
 
-        foreach ($transactions as $transaction) {
-            $csv .= sprintf(
-                "%s,%s,%s,%s,%s,%s,%s\n",
-                $transaction->payment_reference ?? 'N/A',
-                $transaction->status,
-                $transaction->employer?->name ?? 'N/A',
-                $transaction->amount,
-                $transaction->platform_fee,
-                $transaction->payment_method ?? 'N/A',
-                $transaction->created_at->format('Y-m-d H:i')
-            );
-        }
+        $filename = 'transactions_export_'.now()->format('Y-m-d_His').'.csv';
 
-        $this->dispatch('download', data: $csv, filename: 'transactions_export.csv');
+        return response()->streamDownload(function () use ($transactions) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM so Excel displays non-ASCII characters properly
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'Ref ID',
+                'Type',
+                'Client / Employer',
+                'Worker / Winga',
+                'Job / Service Title',
+                'Amount (TZS)',
+                'Platform Fee (TZS)',
+                'Worker Amount (TZS)',
+                'Status',
+                'Payment Method',
+                'Date',
+            ]);
+
+            foreach ($transactions as $transaction) {
+                $title = $transaction->job?->title ?? ($transaction->serviceRequest?->service?->title ?? 'N/A');
+                fputcsv($handle, [
+                    $transaction->payment_reference ?: ('PAY-'.$transaction->id),
+                    $transaction->service_request_id ? 'Service' : 'Job',
+                    $transaction->employer?->name ?? 'N/A',
+                    $transaction->worker?->name ?? 'N/A',
+                    $title,
+                    $transaction->amount,
+                    $transaction->platform_fee,
+                    $transaction->worker_amount,
+                    $transaction->status,
+                    $transaction->payment_method ?? 'N/A',
+                    $transaction->created_at?->format('Y-m-d H:i:s') ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     /**

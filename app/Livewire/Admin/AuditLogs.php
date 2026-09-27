@@ -12,12 +12,19 @@ class AuditLogs extends Component
     use WithPagination;
 
     public string $search = '';
+
     public string $filterAction = '';
+
     public string $filterModel = '';
+
     public string $filterAdmin = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public string $sortBy = 'created_at';
+
     public string $sortDirection = 'desc';
 
     protected $queryString = [
@@ -56,24 +63,24 @@ class AuditLogs extends Component
     {
         return AdminAuditLog::query()
             ->with(['admin:id,name,email,avatar'])
-            ->when($this->search, fn($query) => $query
+            ->when($this->search, fn ($query) => $query
                 ->where(function ($q) {
-                    $q->whereHas('admin', fn($sub) => $sub
+                    $q->whereHas('admin', fn ($sub) => $sub
                         ->where(function ($s) {
-                            $s->where('name', 'like', '%' . $this->search . '%')
-                                ->orWhere('email', 'like', '%' . $this->search . '%');
+                            $s->where('name', 'like', '%'.$this->search.'%')
+                                ->orWhere('email', 'like', '%'.$this->search.'%');
                         })
                     )
-                    ->orWhere('action', 'like', '%' . $this->search . '%')
-                    ->orWhere('model_type', 'like', '%' . $this->search . '%')
-                    ->orWhere('ip_address', 'like', '%' . $this->search . '%');
+                        ->orWhere('action', 'like', '%'.$this->search.'%')
+                        ->orWhere('model_type', 'like', '%'.$this->search.'%')
+                        ->orWhere('ip_address', 'like', '%'.$this->search.'%');
                 })
             )
-            ->when($this->filterAction, fn($query) => $query->where('action', $this->filterAction))
-            ->when($this->filterModel, fn($query) => $query->where('model_type', 'like', '%' . $this->filterModel . '%'))
-            ->when($this->filterAdmin, fn($query) => $query->where('admin_id', $this->filterAdmin))
-            ->when($this->dateFrom, fn($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn($query) => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->filterAction, fn ($query) => $query->where('action', $this->filterAction))
+            ->when($this->filterModel, fn ($query) => $query->where('model_type', 'like', '%'.$this->filterModel.'%'))
+            ->when($this->filterAdmin, fn ($query) => $query->where('admin_id', $this->filterAdmin))
+            ->when($this->dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->orderBy($this->sortBy, $this->sortDirection);
     }
 
@@ -131,7 +138,7 @@ class AuditLogs extends Component
         return AdminAuditLog::distinct('model_type')
             ->orderBy('model_type')
             ->pluck('model_type')
-            ->map(fn($model) => class_basename($model))
+            ->map(fn ($model) => class_basename($model))
             ->toArray();
     }
 
@@ -263,29 +270,36 @@ class AuditLogs extends Component
         return $colors[$action] ?? 'gray';
     }
 
-    public function exportAuditLogs(): void
+    public function exportAuditLogs()
     {
         $logs = $this->getAuditLogsQuery()->with(['admin', 'model'])->get();
-        
-        $csv = "ID,Admin,Action,Model Type,Model ID,IP Address,User Agent,Old Values,New Values,Created At\n";
-        
-        foreach ($logs as $log) {
-            $csv .= sprintf(
-                "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                $log->id,
-                str_replace(',', '', $log->admin->name ?? 'System'),
-                $log->action,
-                $log->model_type ? class_basename($log->model_type) : '',
-                $log->model_id ?? '',
-                $log->ip_address ?? '',
-                str_replace(',', ';', $log->user_agent ?? ''),
-                str_replace(',', ';', is_array($log->old_values) ? json_encode($log->old_values) : ($log->old_values ?? '')),
-                str_replace(',', ';', is_array($log->new_values) ? json_encode($log->new_values) : ($log->new_values ?? '')),
-                $log->created_at->format('Y-m-d H:i:s')
-            );
-        }
+        $filename = 'audit_logs_export_'.now()->format('Y-m-d_His').'.csv';
 
-        $this->dispatch('download', data: $csv, filename: 'audit_logs_export.csv');
+        return response()->streamDownload(function () use ($logs) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['ID', 'Admin', 'Action', 'Model Type', 'Model ID', 'IP Address', 'User Agent', 'Old Values', 'New Values', 'Created At']);
+
+            foreach ($logs as $log) {
+                fputcsv($handle, [
+                    $log->id,
+                    $log->admin->name ?? 'System',
+                    $log->action,
+                    $log->model_type ? class_basename($log->model_type) : '',
+                    $log->model_id ?? '',
+                    $log->ip_address ?? '',
+                    $log->user_agent ?? '',
+                    is_array($log->old_values) ? json_encode($log->old_values) : ($log->old_values ?? ''),
+                    is_array($log->new_values) ? json_encode($log->new_values) : ($log->new_values ?? ''),
+                    $log->created_at?->format('Y-m-d H:i:s') ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     public function clearOldLogs(): void
@@ -295,7 +309,7 @@ class AuditLogs extends Component
         ]);
 
         $count = AdminAuditLog::whereDate('created_at', '<', $this->dateFrom)->delete();
-        
+
         $this->dispatch('toast', message: "Deleted {$count} old audit logs", type: 'success');
     }
 

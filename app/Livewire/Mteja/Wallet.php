@@ -5,10 +5,13 @@ namespace App\Livewire\Mteja;
 use App\Models\Transaction;
 use App\Models\WithdrawalRequest;
 use App\Services\SettingsService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class Wallet extends Component
 {
+    public string $activeTab = 'transactions';
+
     public bool $showDepositModal = false;
 
     public int $depositStep = 1;
@@ -99,7 +102,7 @@ class Wallet extends Component
 
         $user = auth()->user();
         $service = new \App\Services\SnippePaymentService;
-        $orderId = 'D' . $user->id . 'M' . substr(md5(uniqid()), 0, 8);
+        $orderId = 'D'.$user->id.'M'.substr(md5(uniqid()), 0, 8);
 
         $phoneToUse = $this->phone;
         // Convert local 07xx to 2557xx standard format
@@ -170,7 +173,7 @@ class Wallet extends Component
 
             $user = auth()->user();
             $service = new \App\Services\SnippePaymentService;
-            $orderId = 'C' . $user->id . 'K' . substr(md5(uniqid()), 0, 8);
+            $orderId = 'C'.$user->id.'K'.substr(md5(uniqid()), 0, 8);
 
             $customer = [
                 'firstname' => explode(' ', $user->name)[0] ?? 'Employer',
@@ -257,36 +260,50 @@ class Wallet extends Component
             return;
         }
 
-        // Deduct from wallet
-        $user->decrement('wallet_balance', $totalDeduction);
+        $methodValue = match (strtolower($this->withdrawNetwork)) {
+            'airtel' => 'airtel_money',
+            'vodacom' => 'mpesa',
+            'tigopesa', 'tigo' => 'tigopesa',
+            'halopesa', 'halotel' => 'halopesa',
+            default => 'mobile_money',
+        };
 
-        // Create withdrawal request
-        $withdrawal = WithdrawalRequest::create([
-            'user_id' => $user->id,
-            'amount' => $this->withdrawAmount,
-            'charge_percent' => $chargePercent,
-            'charge_amount' => $chargeAmount,
-            'net_amount' => $this->withdrawAmount,
-            'method' => $this->withdrawMethod,
-            'phone' => $this->withdrawPhone,
-            'network' => $this->withdrawNetwork,
-            'status' => 'pending',
-            'notes' => 'Mteja withdrawal request',
-        ]);
+        DB::transaction(function () use ($user, $totalDeduction, $chargePercent, $chargeAmount, $methodValue) {
+            // Deduct from wallet
+            $user->decrement('wallet_balance', $totalDeduction);
 
-        // Create transaction record
-        Transaction::create([
-            'user_id' => $user->id,
-            'type' => 'debit',
-            'amount' => $totalDeduction,
-            'description' => 'Ombi la kutoa pesa: TZS '.number_format($this->withdrawAmount).' + ada TZS '.number_format($chargeAmount).' ('.$chargePercent.'%)',
-            'balance_after' => $user->fresh()->wallet_balance,
-            'reference' => 'WD-'.$withdrawal->id,
-            'status' => 'completed',
-        ]);
+            // Create withdrawal request
+            $withdrawal = WithdrawalRequest::create([
+                'user_id' => $user->id,
+                'amount' => $this->withdrawAmount,
+                'charge_percent' => $chargePercent,
+                'charge_amount' => $chargeAmount,
+                'net_amount' => $this->withdrawAmount,
+                'method' => $methodValue,
+                'phone' => $this->withdrawPhone,
+                'account_number' => $this->withdrawPhone,
+                'network' => $this->withdrawNetwork,
+                'status' => 'pending',
+                'payout_status' => 'pending',
+                'notes' => 'Mteja withdrawal request',
+            ]);
 
+            // Create transaction record
+            Transaction::create([
+                'user_id' => $user->id,
+                'type' => 'debit',
+                'amount' => $totalDeduction,
+                'description' => 'Ombi la kutoa pesa: TZS '.number_format($this->withdrawAmount).' + ada TZS '.number_format($chargeAmount).' ('.$chargePercent.'%)',
+                'balance_after' => $user->fresh()->wallet_balance,
+                'reference' => 'WD-'.$withdrawal->id,
+                'status' => 'completed',
+            ]);
+        });
+
+        $submittedAmount = (float) $this->withdrawAmount;
+        $this->activeTab = 'withdrawals';
         $this->closeWithdrawModal();
-        $this->dispatch('toast', message: 'Ombi la kutoa TZS '.number_format($this->withdrawAmount).' limetumwa! Ada: TZS '.number_format($chargeAmount).' ('.$chargePercent.'%).', type: 'success');
+        $this->dispatch('toast', message: 'Ombi la kutoa TZS '.number_format($submittedAmount).' limetumwa! Ada: TZS '.number_format($chargeAmount).' ('.$chargePercent.'%).', type: 'success');
     }
 
     public function render()
@@ -302,6 +319,7 @@ class Wallet extends Component
             'transactions' => $transactions,
             'withdrawalChargePercent' => $withdrawalChargePercent,
             'withdrawals' => $withdrawals,
+            'activeTab' => $this->activeTab,
         ])
             ->layout('layouts.mteja')
             ->title('Wallet Kutengeneza Malipo');

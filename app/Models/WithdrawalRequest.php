@@ -2,9 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 
 class WithdrawalRequest extends Model
 {
@@ -54,21 +53,21 @@ class WithdrawalRequest extends Model
     {
         if ($this->network) {
             return match (strtolower($this->network)) {
-                'airtel'   => 'Airtel Money',
-                'vodacom'  => 'M-Pesa (Vodacom)',
-                'tigo'     => 'TigoPesa',
-                'halopesa' => 'HaloPesa',
-                default    => ucfirst($this->network),
+                'airtel' => 'Airtel Money',
+                'vodacom' => 'M-Pesa (Vodacom)',
+                'tigo', 'tigopesa' => 'TigoPesa',
+                'halopesa', 'halotel' => 'HaloPesa',
+                default => ucfirst($this->network),
             };
         }
 
         return match ($this->method) {
-            'mpesa'          => 'M-Pesa',
-            'tigopesa'       => 'TigoPesa',
-            'airtel_money'   => 'Airtel Money',
-            'mobile_money'   => 'Mobile Money',
-            'bank_transfer'  => 'Bank Transfer',
-            default          => ucfirst($this->method),
+            'mpesa' => 'M-Pesa',
+            'tigopesa' => 'TigoPesa',
+            'airtel_money' => 'Airtel Money',
+            'mobile_money' => 'Mobile Money',
+            'bank_transfer' => 'Bank Transfer',
+            default => ucfirst($this->method),
         };
     }
 }

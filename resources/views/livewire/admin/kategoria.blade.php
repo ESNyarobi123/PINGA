@@ -10,9 +10,24 @@
                     class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
                 ➕ {{ __('messages.admin_categories.add_category') }}
             </button>
-            <button wire:click="exportCategories"
-                    class="px-4 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition">
-                📤 {{ __('messages.admin_categories.export_csv') }}
+            <button type="button"
+                    wire:click="exportCategories"
+                    wire:loading.attr="disabled"
+                    wire:target="exportCategories"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 active:bg-zinc-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition shadow-sm cursor-pointer shrink-0">
+                <span wire:loading.remove wire:target="exportCategories" class="inline-flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {{ __('messages.admin_categories.export_csv') }}
+                </span>
+                <span wire:loading wire:target="exportCategories" class="inline-flex items-center gap-2">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ __('Inapakua...') }}
+                </span>
             </button>
         </div>
     </div>

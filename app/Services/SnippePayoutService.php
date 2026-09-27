@@ -10,7 +10,6 @@ use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class SnippePayoutService
 {
@@ -22,10 +21,10 @@ class SnippePayoutService
 
     public function __construct()
     {
-        $this->apiKey     = config('services.snippe.key');
-        $this->baseUrl    = config('services.snippe.url', 'https://api.snippe.sh');
-        $webhookBase      = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
-        $this->webhookUrl = $webhookBase . '/api/webhooks/snippe-payout';
+        $this->apiKey = config('services.snippe.key');
+        $this->baseUrl = config('services.snippe.url', 'https://api.snippe.sh');
+        $webhookBase = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
+        $this->webhookUrl = $webhookBase.'/api/webhooks/snippe-payout';
     }
 
     /**
@@ -41,11 +40,11 @@ class SnippePayoutService
         }
 
         if (str_starts_with($phone, '0') && strlen($phone) === 10) {
-            return '255' . substr($phone, 1);
+            return '255'.substr($phone, 1);
         }
 
         if (strlen($phone) === 9) {
-            return '255' . $phone;
+            return '255'.$phone;
         }
 
         return $phone;
@@ -99,59 +98,59 @@ class SnippePayoutService
     public function sendPayout(array $data): array
     {
         $formattedPhone = $this->formatPhone($data['phone']);
-        $network        = $data['network'] ?? $this->detectNetwork($formattedPhone);
+        $network = $data['network'] ?? $this->detectNetwork($formattedPhone);
 
         $payload = [
-            'amount'           => (int) $data['amount'],
-            'channel'          => 'mobile',
-            'network'          => $network,
-            'recipient_phone'  => $formattedPhone,
-            'recipient_name'   => $data['name'],
-            'narration'        => $data['narration'],
-            'webhook_url'      => $this->webhookUrl,
-            'metadata'         => $data['metadata'] ?? [],
+            'amount' => (int) $data['amount'],
+            'channel' => 'mobile',
+            'network' => $network,
+            'recipient_phone' => $formattedPhone,
+            'recipient_name' => $data['name'],
+            'narration' => $data['narration'],
+            'webhook_url' => $this->webhookUrl,
+            'metadata' => $data['metadata'] ?? [],
         ];
 
         Log::info('Snippe Payout Request', [
             'idempotency_key' => $data['idempotency_key'],
-            'amount'          => $payload['amount'],
-            'phone'           => $formattedPhone,
-            'network'         => $network,
+            'amount' => $payload['amount'],
+            'phone' => $formattedPhone,
+            'network' => $network,
         ]);
 
         try {
             $response = Http::withHeaders([
-                'Authorization'   => "Bearer {$this->apiKey}",
+                'Authorization' => "Bearer {$this->apiKey}",
                 'Idempotency-Key' => $data['idempotency_key'],
-                'Accept'          => 'application/json',
-                'Content-Type'    => 'application/json',
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
             ])->timeout(30)->post("{$this->baseUrl}/v1/payouts/send", $payload);
 
             $result = $response->json() ?? [];
 
             Log::info('Snippe Payout Response', [
-                'status'   => $response->status(),
+                'status' => $response->status(),
                 'response' => $result,
             ]);
 
             if ($response->successful()) {
                 return [
-                    'success'   => true,
+                    'success' => true,
                     'reference' => $result['data']['id'] ?? $result['id'] ?? null,
-                    'data'      => $result,
+                    'data' => $result,
                 ];
             }
 
             Log::error('Snippe Payout API Error', [
-                'status'  => $response->status(),
-                'body'    => $response->body(),
+                'status' => $response->status(),
+                'body' => $response->body(),
                 'payload' => $payload,
             ]);
 
             return [
                 'success' => false,
-                'error'   => $result['message'] ?? 'Snippe payout failed',
-                'data'    => $result,
+                'error' => $result['message'] ?? 'Snippe payout failed',
+                'data' => $result,
             ];
 
         } catch (\Exception $e) {
@@ -162,7 +161,7 @@ class SnippePayoutService
 
             return [
                 'success' => false,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -175,7 +174,7 @@ class SnippePayoutService
         try {
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->apiKey}",
-                'Accept'        => 'application/json',
+                'Accept' => 'application/json',
             ])->timeout(15)->get("{$this->baseUrl}/v1/payouts/{$reference}");
 
             if ($response->successful()) {
@@ -198,26 +197,27 @@ class SnippePayoutService
     {
         Log::info('Snippe Payout Webhook', ['payload' => $payload]);
 
-        $status    = strtolower($payload['status'] ?? $payload['data']['status'] ?? '');
+        $status = strtolower($payload['status'] ?? $payload['data']['status'] ?? '');
         $reference = $payload['id'] ?? $payload['data']['id'] ?? $payload['reference'] ?? null;
-        $metadata  = $payload['metadata'] ?? $payload['data']['metadata'] ?? [];
+        $metadata = $payload['metadata'] ?? $payload['data']['metadata'] ?? [];
 
         if (! $reference) {
             Log::warning('Snippe Payout Webhook: no reference found', $payload);
+
             return;
         }
 
-        $type         = $metadata['type'] ?? 'payout';
-        $paymentId    = $metadata['payment_id'] ?? null;
+        $type = $metadata['type'] ?? 'payout';
+        $paymentId = $metadata['payment_id'] ?? null;
         $withdrawalId = $metadata['withdrawal_id'] ?? null;
-        $workerId     = $metadata['worker_id'] ?? $metadata['user_id'] ?? null;
-        $rawAmount    = $payload['amount'] ?? $payload['data']['amount'] ?? 0;
-        $amount       = is_array($rawAmount) ? ($rawAmount['value'] ?? 0) : $rawAmount;
+        $workerId = $metadata['worker_id'] ?? $metadata['user_id'] ?? null;
+        $rawAmount = $payload['amount'] ?? $payload['data']['amount'] ?? 0;
+        $amount = is_array($rawAmount) ? ($rawAmount['value'] ?? 0) : $rawAmount;
 
         match ($status) {
-            'completed', 'success'  => $this->handlePayoutCompleted($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
-            'failed', 'error'       => $this->handlePayoutFailed($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
-            default                 => Log::info("Snippe Payout Webhook: unhandled status [{$status}]"),
+            'completed', 'success' => $this->handlePayoutCompleted($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
+            'failed', 'error' => $this->handlePayoutFailed($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
+            default => Log::info("Snippe Payout Webhook: unhandled status [{$status}]"),
         };
     }
 
@@ -247,10 +247,10 @@ class SnippePayoutService
         // Update withdrawal request
         if ($withdrawalId) {
             WithdrawalRequest::where('id', $withdrawalId)->update([
-                'status'            => 'paid',
-                'payout_reference'  => $reference,
-                'payout_status'     => 'completed',
-                'processed_at'      => now(),
+                'status' => 'paid',
+                'payout_reference' => $reference,
+                'payout_status' => 'completed',
+                'processed_at' => now(),
             ]);
         }
 
@@ -260,7 +260,7 @@ class SnippePayoutService
             if ($worker) {
                 $worker->notify(new WingaNotification(
                     title: '💸 Pesa Imefika!',
-                    message: "Umepokea TZS " . number_format($amount) . " kwenye simu yako. Asante kwa kutumia Winga!",
+                    message: 'Umepokea TZS '.number_format($amount).' kwenye simu yako. Asante kwa kutumia Winga!',
                     icon: 'banknotes',
                     color: 'green',
                     action_url: route('winga.mapato'),
@@ -293,26 +293,38 @@ class SnippePayoutService
             $withdrawal = WithdrawalRequest::find($withdrawalId);
             if ($withdrawal && $withdrawal->status !== 'refunded') {
                 $withdrawal->update([
-                    'status'           => 'rejected',
-                    'payout_status'    => 'failed',
+                    'status' => 'rejected',
+                    'payout_status' => 'failed',
                     'payout_reference' => $reference,
-                    'admin_note'       => 'Snippe payout failed automatically.',
-                    'processed_at'     => now(),
+                    'admin_note' => 'Snippe payout failed automatically.',
+                    'processed_at' => now(),
                 ]);
 
                 // Refund wallet
                 if ($workerId) {
-                    User::where('id', $workerId)->increment('wallet_balance', $withdrawal->amount);
+                    $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
+                    User::where('id', $workerId)->increment('wallet_balance', $refundAmount);
                     $workerFresh = User::find($workerId);
 
+                    Transaction::where('user_id', $workerId)
+                        ->where(function ($q) use ($withdrawal) {
+                            $q->where('reference', 'WD-'.$withdrawal->id)
+                                ->orWhere(function ($sub) use ($withdrawal) {
+                                    $sub->where('type', 'withdrawal')
+                                        ->where('status', 'processing')
+                                        ->where('amount', $withdrawal->amount);
+                                });
+                        })
+                        ->update(['status' => 'failed']);
+
                     Transaction::create([
-                        'user_id'      => $workerId,
-                        'type'         => 'credit',
-                        'amount'       => $withdrawal->amount,
-                        'description'  => 'Refund: kutoa fedha kumeshindwa — ' . $reference,
+                        'user_id' => $workerId,
+                        'type' => 'credit',
+                        'amount' => $refundAmount,
+                        'description' => 'Refund: kutoa fedha kumeshindwa — '.$reference,
                         'balance_after' => $workerFresh?->wallet_balance ?? 0,
-                        'status'       => 'completed',
-                        'reference'    => 'refund-' . $reference,
+                        'status' => 'completed',
+                        'reference' => 'refund-'.$reference,
                     ]);
                 }
             }
@@ -323,7 +335,7 @@ class SnippePayoutService
             $worker = User::find($workerId);
             $worker?->notify(new WingaNotification(
                 title: '⚠️ Tatizo la Malipo',
-                message: 'Kulikuwa na tatizo na malipo yako ya TZS ' . number_format($amount) . '. Fedha imerudishwa kwenye wallet yako. Jaribu tena.',
+                message: 'Kulikuwa na tatizo na malipo yako ya TZS '.number_format($amount).'. Fedha imerudishwa kwenye wallet yako. Jaribu tena.',
                 icon: 'exclamation-triangle',
                 color: 'red',
                 action_url: route('winga.tomba-ombi'),
@@ -336,7 +348,7 @@ class SnippePayoutService
         foreach ($admins as $admin) {
             $admin->notify(new WingaNotification(
                 title: '🚨 Payout Imeshindwa',
-                message: "Payout {$reference} ya TZS " . number_format($amount) . " imeshindwa. Angalia na ujaribu tena.",
+                message: "Payout {$reference} ya TZS ".number_format($amount).' imeshindwa. Angalia na ujaribu tena.',
                 icon: 'x-circle',
                 color: 'red',
                 action_url: route('admin.maombi-kutoa'),
@@ -361,7 +373,7 @@ class SnippePayoutService
         try {
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->apiKey}",
-                'Accept'        => 'application/json',
+                'Accept' => 'application/json',
             ])->timeout(15)->get("{$this->baseUrl}/v1/payouts/fee", ['amount' => $amount]);
 
             if ($response->successful()) {

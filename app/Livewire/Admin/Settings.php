@@ -551,7 +551,7 @@ class Settings extends Component
         }
     }
 
-    public function exportSettings(): void
+    public function exportSettings()
     {
         $settings = Setting::all()->map(function ($setting) {
             return [
@@ -564,8 +564,14 @@ class Settings extends Component
             ];
         });
 
-        $json = json_encode($settings, JSON_PRETTY_PRINT);
-        $this->dispatch('download', data: $json, filename: 'settings_export.json');
+        $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $filename = 'settings_export_'.now()->format('Y-m-d_His').'.json';
+
+        return response()->streamDownload(
+            fn () => print ($json),
+            $filename,
+            ['Content-Type' => 'application/json; charset=UTF-8']
+        );
     }
 
     public function getSystemInfo(): array

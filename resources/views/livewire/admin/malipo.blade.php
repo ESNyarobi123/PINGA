@@ -173,27 +173,22 @@
                            placeholder="{{ __('messages.admin_malipo.search_placeholder') }}"
                            class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
 
-                    <select wire:model.live="filterType" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+                    <select wire:model.live="filterType" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                         <option value="">{{ __('messages.admin_malipo.all_types') }}</option>
-                        <option value="escrow">Escrow</option>
-                        <option value="payout">Payout</option>
-                        <option value="refund">Refund</option>
-                        <option value="platform_fee">Platform Fee</option>
-                        <option value="deposit">Deposit</option>
-                        <option value="withdrawal">Withdrawal</option>
+                        <option value="job">Kazi (Jobs)</option>
+                        <option value="service">Huduma (Services)</option>
                     </select>
 
-                    <select wire:model.live="filterStatus" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+                    <select wire:model.live="filterStatus" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                         <option value="">{{ __('messages.admin_malipo.all_status') }}</option>
-                        <option value="pending">{{ __('messages.admin_malipo.pending') }}</option>
-                        <option value="completed">{{ __('messages.admin_malipo.completed') }}</option>
-                        <option value="failed">{{ __('messages.admin_malipo.failed') }}</option>
-                        <option value="held">{{ __('messages.admin_malipo.held') }}</option>
+                        <option value="escrowed">{{ __('messages.admin_malipo.held') }}</option>
                         <option value="released">{{ __('messages.admin_malipo.released') }}</option>
                         <option value="refunded">{{ __('messages.admin_malipo.refunded') }}</option>
+                        <option value="pending">{{ __('messages.admin_malipo.pending') }}</option>
+                        <option value="disputed">{{ __('Mgogoro') }}</option>
                     </select>
 
-                    <select wire:model.live="filterMethod" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+                    <select wire:model.live="filterMethod" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                         <option value="">{{ __('messages.admin_malipo.all_methods') }}</option>
                         <option value="snippe">Snippe</option>
                         <option value="wallet">Wallet</option>
@@ -202,13 +197,27 @@
                     </select>
 
                     <div class="flex gap-2">
-                        <input wire:model.live="dateFrom" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
-                        <input wire:model.live="dateTo" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm">
+                        <input wire:model.live="dateFrom" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
+                        <input wire:model.live="dateTo" type="date" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                     </div>
 
-                    <button type="button" wire:click="exportTransactions" 
-                            class="px-4 py-2 bg-zinc-600 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition">
-                        📤 {{ __('messages.admin_malipo.export_csv') }}
+                    <button type="button" 
+                            wire:click="exportTransactions" 
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition shadow-sm cursor-pointer">
+                        <span wire:loading.remove wire:target="exportTransactions" class="inline-flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            {{ __('messages.admin_malipo.export_csv') }}
+                        </span>
+                        <span wire:loading wire:target="exportTransactions" class="inline-flex items-center gap-2">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            {{ __('Inapakua...') }}
+                        </span>
                     </button>
                 </div>
 
@@ -230,34 +239,36 @@
                         <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                             @forelse($transactions as $transaction)
                             <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800 transition">
-                                <td class="px-4 py-3 text-sm font-mono text-zinc-900 dark:text-white">{{ $transaction->reference }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-zinc-900 dark:text-white">
+                                    {{ $transaction->payment_reference ?: ('PAY-' . $transaction->id) }}
+                                </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-1 text-xs font-bold rounded-lg
-                                        {{ $transaction->type === 'escrow' ? 'bg-blue-100 text-blue-700' :
-                                           ($transaction->type === 'payout' ? 'bg-green-100 text-green-700' :
-                                           ($transaction->type === 'refund' ? 'bg-orange-100 text-orange-700' :
-                                           ($transaction->type === 'platform_fee' ? 'bg-purple-100 text-purple-700' :
-                                           'bg-zinc-100 text-zinc-700'))) }}">
-                                        {{ ucfirst($transaction->type) }}
+                                        {{ $transaction->service_request_id ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' }}">
+                                        {{ $transaction->service_request_id ? 'Service' : 'Job' }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-sm text-zinc-900 dark:text-white">{{ $transaction->employer?->name ?? '—' }}</td>
                                 <td class="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-white">TZS {{ number_format($transaction->amount) }}</td>
                                 <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
-                                    @if($transaction->fee)TZS {{ number_format($transaction->fee) }}@else—@endif
+                                    @if($transaction->platform_fee > 0)
+                                        <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">TZS {{ number_format($transaction->platform_fee) }}</span>
+                                    @else
+                                        —
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-1 text-xs font-bold rounded-lg
-                                        {{ $transaction->status === 'completed' ? 'bg-green-100 text-green-700' :
-                                           ($transaction->status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                                           ($transaction->status === 'failed' ? 'bg-red-100 text-red-700' :
-                                           ($transaction->status === 'held' ? 'bg-blue-100 text-blue-700' :
-                                           'bg-zinc-100 text-zinc-700'))) }}">
+                                        {{ $transaction->status === 'released' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                                           ($transaction->status === 'escrowed' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                           ($transaction->status === 'refunded' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                                           ($transaction->status === 'disputed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                                           'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'))) }}">
                                         {{ ucfirst($transaction->status) }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">{{ $transaction->payment_method }}</td>
-                                <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">{{ $transaction->created_at->format('d M Y, H:i') }}</td>
+                                <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">{{ $transaction->payment_method ?? '—' }}</td>
+                                <td class="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">{{ $transaction->created_at?->format('d M Y, H:i') ?? '—' }}</td>
                             </tr>
                             @empty
                             <tr>

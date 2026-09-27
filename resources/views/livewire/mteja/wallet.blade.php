@@ -61,17 +61,36 @@
         </div>
     </div>
 
-    {{-- Transaction History - Compact Cards --}}
+    {{-- History & Withdrawal Requests Section --}}
     <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-        <div class="p-4 border-b border-zinc-200 dark:border-zinc-800">
-            <h2 class="text-lg font-bold text-zinc-900 dark:text-white">{{ __('messages.wallet.history') }}</h2>
+        <div class="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <button type="button"
+                    wire:click="$set('activeTab', 'transactions')"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'transactions' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white' }}">
+                    {{ __('messages.wallet.history') }}
+                </button>
+                <button type="button"
+                    wire:click="$set('activeTab', 'withdrawals')"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 {{ $activeTab === 'withdrawals' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white' }}">
+                    <span>Maombi ya Kutoa</span>
+                    @if($withdrawals->count() > 0)
+                    <span class="px-2 py-0.5 text-xs rounded-full {{ $activeTab === 'withdrawals' ? 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-200' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400' }}">
+                        {{ $withdrawals->count() }}
+                    </span>
+                    @endif
+                </button>
+            </div>
         </div>
+
+        @if($activeTab === 'transactions')
+        {{-- Transactions List --}}
         <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
             @forelse($transactions as $transaction)
             <div class="group p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-l-4 hover:border-l-{{ $transaction->type === 'credit' ? 'emerald' : 'red' }}-500 transition-all duration-200">
-                <div class="flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-3 flex-1 min-w-0">
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-start gap-3 flex-1 min-w-0">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
                             {{ $transaction->type === 'credit' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' }}
                             group-hover:scale-110 transition-transform duration-200">
                             @if($transaction->type === 'credit')
@@ -85,13 +104,25 @@
                             @endif
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-zinc-900 dark:text-white text-sm truncate">{{ $transaction->description }}</p>
-                            <div class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                            <p class="font-semibold text-zinc-900 dark:text-white text-sm">{{ $transaction->description }}</p>
+                            <div class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                                 <span>{{ $transaction->created_at->format('d M Y, H:i') }}</span>
                                 @if($transaction->reference)
                                 <span class="truncate">• Ref: {{ $transaction->reference }}</span>
                                 @endif
                             </div>
+
+                            @if(str_contains(strtolower($transaction->description ?? ''), 'rejected') || str_contains(strtolower($transaction->description ?? ''), 'limekataliwa') || str_contains($transaction->reference ?? '', 'admin-reject-'))
+                            <div class="mt-2.5 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                                <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <div>
+                                    <span class="font-semibold text-red-800 dark:text-red-200">Sababu ya kukataliwa:</span>
+                                    <p class="mt-0.5 text-red-600 dark:text-red-400 leading-relaxed">{{ Str::after($transaction->description, 'Sababu: ') ?: $transaction->description }}</p>
+                                </div>
+                            </div>
+                            @endif
                         </div>
                     </div>
                     <div class="text-right flex-shrink-0">
@@ -114,6 +145,70 @@
             </div>
             @endforelse
         </div>
+        @else
+        {{-- Withdrawal Requests List --}}
+        <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
+            @forelse($withdrawals as $withdrawal)
+            <div class="p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-base font-bold text-zinc-900 dark:text-white">TZS {{ number_format($withdrawal->amount) }}</span>
+                            @switch($withdrawal->status)
+                                @case('pending')
+                                    <span class="inline-flex items-center rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium px-2.5 py-0.5">Inasubiri Uhakiki</span>
+                                    @break
+                                @case('approved')
+                                    <span class="inline-flex items-center rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-medium px-2.5 py-0.5">Imeidhinishwa</span>
+                                    @break
+                                @case('paid')
+                                    <span class="inline-flex items-center rounded-md bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium px-2.5 py-0.5">Imelipwa</span>
+                                    @break
+                                @case('rejected')
+                                    <span class="inline-flex items-center rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium px-2.5 py-0.5">Imekataliwa</span>
+                                    @break
+                                @default
+                                    <span class="inline-flex items-center rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-medium px-2.5 py-0.5">{{ ucfirst($withdrawal->status) }}</span>
+                            @endswitch
+                        </div>
+
+                        <div class="text-xs text-zinc-600 dark:text-zinc-400 space-y-1">
+                            <p><strong>Njia:</strong> {{ $withdrawal->methodLabel() }} &bull; {{ $withdrawal->phone ?? $withdrawal->account_number }}</p>
+                            @if($withdrawal->charge_amount > 0)
+                            <p><strong>Ada:</strong> TZS {{ number_format($withdrawal->charge_amount) }} ({{ $withdrawal->charge_percent }}%) &bull; <strong>Jumla iliyokatwa:</strong> TZS {{ number_format($withdrawal->amount + $withdrawal->charge_amount) }}</p>
+                            @endif
+                            <p><strong>Tarehe:</strong> {{ $withdrawal->created_at->format('d M Y, H:i') }}</p>
+                        </div>
+
+                        @if($withdrawal->status === 'rejected' && $withdrawal->admin_note)
+                        <div class="mt-3 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300">
+                            <div class="flex items-start gap-2">
+                                <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <div>
+                                    <span class="font-semibold text-red-800 dark:text-red-200">Sababu ya kukataliwa:</span>
+                                    <p class="mt-0.5 text-red-600 dark:text-red-400 leading-relaxed">{{ $withdrawal->admin_note }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            @empty
+            <div class="p-12 text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Hakuna maombi ya kutoa fedha</h3>
+                <p class="text-zinc-500 dark:text-zinc-400 text-sm">Hujatuma ombi lolote la kutoa pesa bado.</p>
+            </div>
+            @endforelse
+        </div>
+        @endif
     </div>
 
     {{-- Deposit Modal --}}

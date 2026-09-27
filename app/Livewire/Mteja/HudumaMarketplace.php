@@ -37,6 +37,10 @@ class HudumaMarketplace extends Component
 
         $query = Service::query()
             ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('category_id')
+                    ->orWhereHas('category', fn ($c) => $c->where('is_active', true));
+            })
             ->whereHas('user', fn ($q) => $q->where('role', 'winga')->where('onboarding_completed', true));
 
         if ($hasPackages) {
@@ -58,12 +62,13 @@ class HudumaMarketplace extends Component
             $query->where(function ($q) use ($term) {
                 $q->where('title', 'like', $term)
                     ->orWhere('description', 'like', $term)
-                    ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $term));
+                    ->orWhereHas('category', fn ($c) => $c->where('is_active', true)->where('name', 'like', $term));
             });
         }
 
         if ($this->categoryId !== '') {
-            $query->where('category_id', (int) $this->categoryId);
+            $query->where('category_id', (int) $this->categoryId)
+                ->whereHas('category', fn ($c) => $c->where('is_active', true));
         }
 
         $services = $query->latest('services.updated_at')->latest('services.id')->paginate(12);

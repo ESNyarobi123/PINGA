@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Mteja;
 
+use App\Models\Category;
 use App\Models\Job;
 use App\Notifications\WingaNotification;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -85,13 +87,14 @@ class KaziZangu extends Component
         $this->validate([
             'editTitle' => 'required|string|min:5|max:200',
             'editDescription' => 'required|string|min:20',
-            'editCategoryId' => 'required',
+            'editCategoryId' => ['required', Rule::exists('categories', 'id')->where('is_active', true)],
             'editLocation' => 'required|string',
             'editBudgetMin' => 'required|integer|min:1000',
         ], [
             'editTitle.required' => 'Jina la kazi linahitajika',
             'editDescription.required' => 'Maelezo ya kazi yanahitajika',
             'editCategoryId.required' => 'Chagua kategoria',
+            'editCategoryId.exists' => 'Kategoria uliyochagua haipatikani au imezimwa',
             'editLocation.required' => 'Eneo linahitajika',
             'editBudgetMin.required' => 'Bajeti ya chini inahitajika',
         ]);
@@ -199,7 +202,7 @@ class KaziZangu extends Component
 
         return view('livewire.mteja.kazi-zangu', [
             'jobs' => $query->paginate(10),
-            'categories' => \App\Models\Category::orderBy('name')->get(),
+            'categories' => Category::where('is_active', true)->orderBy('name')->get(),
         ])->layout('layouts.mteja')
             ->title('Kazi Zangu');
     }

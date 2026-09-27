@@ -23,7 +23,7 @@ class FeaturedWorkers extends Component
         $this->categorySlug = $category ?? '';
 
         if ($category) {
-            $cat = Category::where('slug', $category)->first();
+            $cat = Category::where('slug', $category)->where('is_active', true)->first();
             $this->categoryId = $cat?->id;
         }
 
