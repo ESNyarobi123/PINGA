@@ -8,6 +8,7 @@ use App\Models\SubscriptionPayment;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
+use App\Notifications\WingaNotification;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -429,7 +430,7 @@ class Malipo extends Component
 
     public function refundEscrow(int $paymentId): void
     {
-        $payment = Payment::findOrFail($paymentId);
+        $payment = Payment::with(['job', 'serviceRequest.service', 'employer'])->findOrFail($paymentId);
 
         if ($payment->status !== 'escrowed') {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
@@ -437,14 +438,94 @@ class Malipo extends Component
             return;
         }
 
-        // Mark escrow as refunded
-        $payment->update(['status' => 'refunded']);
+        $refunded = DB::transaction(function () use ($payment) {
+            $locked = Payment::query()->lockForUpdate()->find($payment->id);
+
+            if (! $locked || $locked->status !== 'escrowed') {
+                return null;
+            }
+
+            $amount = $this->creditEscrowRefund($locked);
+
+            $locked->update([
+                'status' => 'refunded',
+                'payout_status' => 'refunded',
+            ]);
+
+            if ($locked->job && $locked->job->status === 'in_progress') {
+                $locked->job->update(['status' => 'open']);
+            }
+
+            if ($locked->serviceRequest && $locked->serviceRequest->status === 'in_progress') {
+                $locked->serviceRequest->update(['status' => 'accepted']);
+            }
+
+            return $amount;
+        });
+
+        if ($refunded === null) {
+            $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
+
+            return;
+        }
+
+        $employer = $payment->employer;
+        if ($employer) {
+            $employer->notify(new WingaNotification(
+                title: 'Pesa imerudishwa kwenye wallet',
+                message: 'TZS '.number_format($refunded).' ya escrow imerudishwa kwenye salio lako.',
+                icon: 'banknotes',
+                color: 'green',
+                action_url: route('mteja.wallet'),
+                action_label: 'Angalia Wallet',
+            ));
+        }
 
         $this->logAdminAction('refund_escrow', $payment, [
-            'amount' => $payment->amount,
+            'amount' => $refunded,
         ]);
 
-        $this->dispatch('toast', message: 'Escrow refunded successfully', type: 'success');
+        $this->dispatch('toast', message: 'Pesa imerudishwa kwa mteja', type: 'success');
+    }
+
+    /**
+     * Return the escrowed amount to the client who paid. Skips if a credit for this payment already exists.
+     */
+    public function creditEscrowRefund(Payment $payment): float
+    {
+        $employer = $payment->employer ?? User::query()->find($payment->employer_id);
+        $amount = (float) $payment->amount;
+
+        $debit = Transaction::query()
+            ->where('payment_id', $payment->id)
+            ->where('type', 'debit')
+            ->first();
+
+        if ($debit) {
+            $amount = (float) $debit->amount;
+        }
+
+        $alreadyCredited = Transaction::query()
+            ->where('payment_id', $payment->id)
+            ->where('type', 'credit')
+            ->where('user_id', $payment->employer_id)
+            ->exists();
+
+        if ($employer && ! $alreadyCredited && $amount > 0) {
+            $employer->increment('wallet_balance', $amount);
+
+            Transaction::create([
+                'user_id' => $employer->id,
+                'payment_id' => $payment->id,
+                'type' => 'credit',
+                'amount' => $amount,
+                'description' => 'Rudisho la escrow: '.$payment->escrowItemLabel(),
+                'balance_after' => $employer->fresh()->wallet_balance,
+                'status' => 'completed',
+            ]);
+        }
+
+        return $amount;
     }
 
     public function retryWithdrawal(int $withdrawalId): void

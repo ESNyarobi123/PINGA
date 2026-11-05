@@ -176,3 +176,65 @@ test('releasing the same escrow twice does not double credit the worker', functi
     expect((float) $worker->fresh()->wallet_balance)->toBe(4500.0);
     expect(Transaction::where('payment_id', $payment->id)->where('type', 'credit')->count())->toBe(1);
 });
+
+test('refunding escrow returns the full amount to the client and reopens the job', function () {
+    $admin = revenueAdmin();
+    $worker = User::factory()->create(['role' => 'winga']);
+    $employer = User::factory()->create(['role' => 'mteja', 'wallet_balance' => 0]);
+
+    $job = Job::factory()->create([
+        'employer_id' => $employer->id,
+        'hired_worker_id' => $worker->id,
+        'status' => 'in_progress',
+    ]);
+
+    $payment = Payment::create([
+        'job_id' => $job->id,
+        'employer_id' => $employer->id,
+        'worker_id' => $worker->id,
+        'amount' => 10000,
+        'platform_fee' => 1000,
+        'worker_amount' => 9000,
+        'status' => 'escrowed',
+        'payment_method' => 'wallet',
+    ]);
+
+    Transaction::create([
+        'user_id' => $employer->id,
+        'payment_id' => $payment->id,
+        'type' => 'debit',
+        'amount' => 10000,
+        'description' => 'Escrow',
+        'balance_after' => 0,
+        'status' => 'completed',
+    ]);
+
+    $component = Livewire::actingAs($admin)->test(Malipo::class);
+    $component->call('refundEscrow', $payment->id);
+    $component->call('refundEscrow', $payment->id);
+
+    expect($payment->fresh()->status)->toBe('refunded');
+    expect($job->fresh()->status)->toBe('open');
+    expect((float) $employer->fresh()->wallet_balance)->toBe(10000.0);
+    expect(Transaction::where('payment_id', $payment->id)->where('type', 'credit')->count())->toBe(1);
+});
+
+test('a refund that only changed status can be credited later without paying twice', function () {
+    $employer = User::factory()->create(['role' => 'mteja', 'wallet_balance' => 500]);
+
+    $payment = Payment::create([
+        'employer_id' => $employer->id,
+        'worker_id' => User::factory()->create(['role' => 'winga'])->id,
+        'amount' => 10000,
+        'platform_fee' => 1000,
+        'worker_amount' => 9000,
+        'status' => 'refunded',
+        'payment_method' => 'wallet',
+    ]);
+
+    $this->artisan('payments:credit-missing-refunds')->assertSuccessful();
+    $this->artisan('payments:credit-missing-refunds')->assertSuccessful();
+
+    expect((float) $employer->fresh()->wallet_balance)->toBe(10500.0);
+    expect(Transaction::where('payment_id', $payment->id)->where('type', 'credit')->count())->toBe(1);
+});

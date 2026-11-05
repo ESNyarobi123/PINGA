@@ -39,7 +39,7 @@ class HudumaMalipo extends Component
             ->with(['service', 'package', 'payment'])
             ->first();
 
-        if (! $req || $req->payment) {
+        if (! $req || $this->serviceRequestAlreadyPaid($req)) {
             $this->dispatch('toast', message: __('messages.huduma_malipo.pay_invalid'), type: 'error');
 
             return;
@@ -91,7 +91,7 @@ class HudumaMalipo extends Component
             ->with(['service', 'package', 'payment'])
             ->first();
 
-        if (! $req || $req->payment) {
+        if (! $req || $this->serviceRequestAlreadyPaid($req)) {
             $this->closePaymentModal();
 
             return;
@@ -197,6 +197,13 @@ class HudumaMalipo extends Component
         $this->dispatch('toast', message: __('messages.huduma_malipo.paid', ['amount' => number_format($totalAmount)]), type: 'success');
     }
 
+    private function serviceRequestAlreadyPaid(ServiceRequest $request): bool
+    {
+        $status = $request->payment?->status;
+
+        return in_array($status, ['escrowed', 'released'], true);
+    }
+
     public function render()
     {
         $user = auth()->user();
@@ -209,7 +216,7 @@ class HudumaMalipo extends Component
         $awaitingPayment = ServiceRequest::query()
             ->where('client_id', $user->id)
             ->where('status', 'accepted')
-            ->whereDoesntHave('payment')
+            ->whereDoesntHave('payment', fn ($query) => $query->whereIn('status', ['escrowed', 'released']))
             ->with($with)
             ->latest()
             ->get();

@@ -1,4 +1,4 @@
-<div class="space-y-6" wire:poll.60s>
+<div class="space-y-6">
     {{-- Hero --}}
     <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -19,7 +19,7 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2 space-y-8">
+        <div class="lg:col-span-2 space-y-8" wire:poll.60s>
             {{-- Jobs --}}
             <div class="space-y-4">
                 <div class="flex items-center gap-2">

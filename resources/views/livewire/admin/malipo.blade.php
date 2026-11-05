@@ -47,10 +47,10 @@
             </div>
             <div class="flex items-center gap-2">
                 <p class="text-xl font-bold text-zinc-900 dark:text-white">TZS {{ number_format($stats['todayRevenue']) }}</p>
-                @if($stats['todayRevenue'] > $stats['yesterdayRevenue'])
-                <span class="text-xs text-green-600">↑ {{ number_format(($stats['todayRevenue'] - $stats['yesterdayRevenue']) / max($stats['yesterdayRevenue'], 1) * 100) }}%</span>
-                @else
-                <span class="text-xs text-red-600">↓ {{ number_format(($stats['yesterdayRevenue'] - $stats['todayRevenue']) / max($stats['yesterdayRevenue'], 1) * 100) }}%</span>
+                @if($stats['yesterdayRevenue'] > 0 && $stats['todayRevenue'] > $stats['yesterdayRevenue'])
+                <span class="text-xs text-green-600">↑ {{ number_format(($stats['todayRevenue'] - $stats['yesterdayRevenue']) / $stats['yesterdayRevenue'] * 100) }}%</span>
+                @elseif($stats['yesterdayRevenue'] > 0)
+                <span class="text-xs text-red-600">↓ {{ number_format(($stats['yesterdayRevenue'] - $stats['todayRevenue']) / $stats['yesterdayRevenue'] * 100) }}%</span>
                 @endif
             </div>
             <p class="text-xs text-zinc-500">{{ __('messages.admin_malipo.vs_yesterday') }}</p>

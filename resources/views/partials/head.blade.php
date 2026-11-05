@@ -16,3 +16,17 @@
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 @fluxAppearance
+
+<script>
+    document.addEventListener('livewire:init', () => {
+        Livewire.hook('morph.updating', ({ el, skip }) => {
+            if (el !== document.activeElement) {
+                return;
+            }
+
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                skip();
+            }
+        });
+    });
+</script>
