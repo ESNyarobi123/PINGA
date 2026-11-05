@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Conversation extends Model
 {
     protected $fillable = [
         'job_id',
+        'service_request_id',
         'employer_id',
         'worker_id',
         'employer_last_read',
@@ -22,29 +27,74 @@ class Conversation extends Model
         ];
     }
 
-    public function job()
+    public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
     }
 
-    public function employer()
+    public function serviceRequest(): BelongsTo
+    {
+        return $this->belongsTo(ServiceRequest::class);
+    }
+
+    public function employer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'employer_id');
     }
 
-    public function worker()
+    public function worker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'worker_id');
     }
 
-    public function messages()
+    public function messages(): HasMany
     {
         return $this->hasMany(Message::class)->orderBy('created_at');
     }
 
-    public function latestMessage()
+    public function latestMessage(): HasOne
     {
         return $this->hasOne(Message::class)->latestOfMany();
+    }
+
+    /**
+     * Conversations the given user takes part in.
+     */
+    public function scopeForUser(Builder $query, int $userId): Builder
+    {
+        return $query->where(function (Builder $q) use ($userId) {
+            $q->where('employer_id', $userId)->orWhere('worker_id', $userId);
+        });
+    }
+
+    public function otherPartyId(int $userId): ?int
+    {
+        return $this->employer_id === $userId
+            ? $this->worker_id
+            : ($this->worker_id === $userId ? $this->employer_id : null);
+    }
+
+    public function otherParty(int $userId): ?User
+    {
+        $otherId = $this->otherPartyId($userId);
+
+        return $otherId ? User::find($otherId) : null;
+    }
+
+    /**
+     * Title of the job or service this conversation belongs to.
+     */
+    public function contextLabel(): string
+    {
+        if ($this->job_id) {
+            return (string) ($this->job?->title ?? '—');
+        }
+
+        if ($this->service_request_id) {
+            return (string) ($this->serviceRequest?->service?->title ?? '—');
+        }
+
+        return __('messages.chat_box.direct');
     }
 
     /**

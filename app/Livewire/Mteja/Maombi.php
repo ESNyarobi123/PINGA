@@ -110,9 +110,9 @@ class Maombi extends Component
 
         // Auto-create conversation
         $conversation = Conversation::firstOrCreate([
-            'job_id'      => $app->job_id,
+            'job_id' => $app->job_id,
             'employer_id' => $user->id,
-            'worker_id'   => $app->worker_id,
+            'worker_id' => $app->worker_id,
         ]);
 
         // Notify worker
@@ -122,7 +122,7 @@ class Maombi extends Component
                 message: 'Hongera! Mteja amekubali ombi lako kwa kazi: "'.$app->job->title.'". Zungumza naye kukubaliana!',
                 icon: 'check-circle',
                 color: 'green',
-                action_url: route('messages'),
+                action_url: route('messages.conversation', ['conversationId' => $conversation->id]),
                 action_label: 'Fungua Chat',
             ));
         }
@@ -141,11 +141,13 @@ class Maombi extends Component
 
         if (! $app) {
             $this->dispatch('toast', message: 'Ombi hili halikupatikana au tayari limelipwa.', type: 'error');
+
             return;
         }
 
         if ($app->job->status === 'in_progress') {
             $this->dispatch('toast', message: 'Kazi hii tayari imelipwa na inaendelea.', type: 'warning');
+
             return;
         }
 
@@ -184,6 +186,19 @@ class Maombi extends Component
 
         if (! $app) {
             $this->closePaymentModal();
+
+            return;
+        }
+
+        $alreadyPaid = \App\Models\Payment::query()
+            ->where('job_id', $app->job_id)
+            ->whereIn('status', ['escrowed', 'released'])
+            ->exists();
+
+        if ($alreadyPaid) {
+            $this->closePaymentModal();
+            $this->dispatch('toast', message: 'Kazi hii tayari imelipwa — hakuna malipo ya pili yanayohitajika.', type: 'warning');
+
             return;
         }
 
@@ -196,6 +211,7 @@ class Maombi extends Component
             session()->flash('deposit_amount', $totalAmount);
             session()->flash('deposit_reason', 'Malipo ya kazi: '.$app->job->title);
             $this->redirect(route('mteja.wallet'));
+
             return;
         }
 
@@ -212,6 +228,7 @@ class Maombi extends Component
                 action_url: route('mteja.wallet'),
                 action_label: 'Weka Pesa'
             );
+
             return;
         }
 
@@ -230,22 +247,22 @@ class Maombi extends Component
 
         // 2. Create Escrow Payment record
         $payment = \App\Models\Payment::create(array_merge($fees, [
-            'job_id'         => $app->job_id,
-            'employer_id'    => $user->id,
-            'worker_id'      => $app->worker_id,
-            'status'         => 'escrowed',
+            'job_id' => $app->job_id,
+            'employer_id' => $user->id,
+            'worker_id' => $app->worker_id,
+            'status' => 'escrowed',
             'payment_method' => $this->paymentMethod,
         ]));
 
         // 3. Create Transaction history for employer
         \App\Models\Transaction::create([
-            'user_id'       => $user->id,
-            'payment_id'    => $payment->id,
-            'type'          => 'debit',
-            'amount'        => $totalAmount,
-            'description'   => "Malipo ya kushikiliwa (Escrow): {$app->job->title}",
+            'user_id' => $user->id,
+            'payment_id' => $payment->id,
+            'type' => 'debit',
+            'amount' => $totalAmount,
+            'description' => "Malipo ya kushikiliwa (Escrow): {$app->job->title}",
             'balance_after' => $user->fresh()->wallet_balance,
-            'status'        => 'completed',
+            'status' => 'completed',
         ]);
 
         // 4. Move job to in_progress
@@ -253,12 +270,18 @@ class Maombi extends Component
 
         // 5. Notify worker
         if ($app->worker) {
+            $conversation = Conversation::firstOrCreate([
+                'job_id' => $app->job_id,
+                'employer_id' => $app->job->employer_id,
+                'worker_id' => $app->worker_id,
+            ]);
+
             $app->worker->notify(new WingaNotification(
                 title: 'Pesa Imewekwa! Anza Kufanya Kazi',
                 message: 'Mteja amelipa TZS '.number_format($totalAmount).' kwa kazi: "'.$app->job->title.'". Pesa iko salama — anza kazi!',
                 icon: 'currency-dollar',
                 color: 'green',
-                action_url: route('messages'),
+                action_url: route('messages.conversation', ['conversationId' => $conversation->id]),
                 action_label: 'Fungua Chat',
             ));
         }
@@ -295,6 +318,7 @@ class Maombi extends Component
 
         if (! $app) {
             $this->closeRejectModal();
+
             return;
         }
 
@@ -398,7 +422,7 @@ class Maombi extends Component
 
         // Get job IDs for counts
         $jobIds = Job::where('employer_id', $user->id)->pluck('id');
-        
+
         $applications = $query->latest()->paginate(10);
 
         $counts = [
@@ -407,7 +431,17 @@ class Maombi extends Component
             'accepted' => Application::whereIn('job_id', $jobIds)->where('status', 'accepted')->count(),
         ];
 
-        return view('livewire.mteja.maombi', compact('applications', 'selectedJob', 'counts'))
+        // Conversation per accepted application (job + worker pair)
+        $conversationIds = Conversation::query()
+            ->where('employer_id', $user->id)
+            ->whereIn('job_id', $jobIds)
+            ->get(['id', 'job_id', 'worker_id'])
+            ->mapWithKeys(fn ($conversation) => [
+                $conversation->job_id.'-'.$conversation->worker_id => $conversation->id,
+            ])
+            ->all();
+
+        return view('livewire.mteja.maombi', compact('applications', 'selectedJob', 'counts', 'conversationIds'))
             ->layout('layouts.mteja')
             ->title($selectedJob ? 'Maombi: '.$selectedJob->title : 'Maombi Yote');
     }

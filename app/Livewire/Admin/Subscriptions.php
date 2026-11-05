@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\Subscription;
+use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Services\SubscriptionService;
@@ -112,12 +113,19 @@ class Subscriptions extends Component
     private function getChartData(): array
     {
         $paid = fn (): Builder => clone $this->paidSubscriptionQuery();
+        $hasLedger = SubscriptionPayment::query()->exists();
 
-        // Revenue by plan — cumulative amount_paid on each row (includes renewals on same row).
-        $revenueByPlan = $paid()->selectRaw('plan_slug, SUM(amount_paid) as total')
-            ->groupBy('plan_slug')
-            ->pluck('total', 'plan_slug')
-            ->toArray();
+        // Revenue by plan — one ledger row per actual payment (renewals included).
+        $revenueByPlan = $hasLedger
+            ? SubscriptionPayment::query()
+                ->selectRaw('plan_slug, SUM(amount) as total')
+                ->groupBy('plan_slug')
+                ->pluck('total', 'plan_slug')
+                ->toArray()
+            : $paid()->selectRaw('plan_slug, SUM(amount_paid) as total')
+                ->groupBy('plan_slug')
+                ->pluck('total', 'plan_slug')
+                ->toArray();
 
         // Subscription rows by plan (historical active + expired, paid).
         $subsByPlan = $paid()->selectRaw('plan_slug, COUNT(*) as count')
@@ -125,17 +133,24 @@ class Subscriptions extends Component
             ->pluck('count', 'plan_slug')
             ->toArray();
 
-        // New subscription rows created per month (renewals update same row → not counted here).
+        // Payments collected per month.
         $monthlyRevenue = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = now()->subMonths($i);
-            $revenue = $paid()
-                ->whereMonth('created_at', $month->month)
-                ->whereYear('created_at', $month->year)
-                ->sum('amount_paid');
+
+            $revenue = $hasLedger
+                ? (float) SubscriptionPayment::query()
+                    ->whereYear('paid_at', $month->year)
+                    ->whereMonth('paid_at', $month->month)
+                    ->sum('amount')
+                : (float) $paid()
+                    ->whereMonth('created_at', $month->month)
+                    ->whereYear('created_at', $month->year)
+                    ->sum('amount_paid');
+
             $monthlyRevenue[] = [
                 'month' => $month->format('M Y'),
-                'revenue' => (float) $revenue,
+                'revenue' => $revenue,
             ];
         }
 
@@ -184,14 +199,20 @@ class Subscriptions extends Component
         }
 
         $plans = SubscriptionPlan::active()->get();
+        $hasLedger = SubscriptionPayment::query()->exists();
+
         $stats = [
             'total_active' => Subscription::active()->count(),
             'total_expired' => Subscription::where('status', 'expired')->count(),
-            'revenue_total' => (clone $this->paidSubscriptionQuery())->sum('amount_paid'),
-            // New paid rows created this month (excludes renewal-only updates on existing rows).
-            'revenue_month' => (clone $this->paidSubscriptionQuery())
-                ->where('created_at', '>=', now()->startOfMonth())
-                ->sum('amount_paid'),
+            'revenue_total' => $hasLedger
+                ? (float) SubscriptionPayment::query()->sum('amount')
+                : (float) (clone $this->paidSubscriptionQuery())->sum('amount_paid'),
+            // Payments collected this month (ledger keeps renewals separate).
+            'revenue_month' => $hasLedger
+                ? (float) SubscriptionPayment::query()->where('paid_at', '>=', now()->startOfMonth())->sum('amount')
+                : (float) (clone $this->paidSubscriptionQuery())
+                    ->where('created_at', '>=', now()->startOfMonth())
+                    ->sum('amount_paid'),
         ];
 
         // Analytics charts data

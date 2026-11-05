@@ -124,7 +124,10 @@
                     <span class="text-zinc-500">
                         {{ __('messages.codes.job_started') }} {{ $job->updated_at?->diffForHumans() ?? __('messages.codes.recently') }}
                     </span>
-                    <a href="{{ route('messages') }}?user={{ $job->hiredWorker?->id }}" class="text-emerald-600 hover:text-emerald-700 font-medium" wire:navigate>
+                    @php
+                        $jobConversationId = $jobConversationIds[$job->id.'-'.$job->hired_worker_id] ?? null;
+                    @endphp
+                    <a href="{{ $jobConversationId ? route('messages.conversation', ['conversationId' => $jobConversationId]) : route('messages') }}" class="text-emerald-600 hover:text-emerald-700 font-medium" wire:navigate>
                         {{ __('messages.codes.chat_with') }} {{ $job->hiredWorker?->name }}
                     </a>
                 </div>
@@ -222,7 +225,10 @@
             </div>
 
             <div class="px-4 py-3 bg-zinc-50 dark:bg-zinc-800/30 border-t border-zinc-200 dark:border-zinc-800">
-                <a href="{{ route('messages') }}?user={{ $sr->service->user_id }}" class="text-emerald-600 hover:text-emerald-700 font-medium text-sm" wire:navigate>
+                @php
+                    $serviceConversationId = $serviceConversationIds[$sr->id] ?? null;
+                @endphp
+                <a href="{{ $serviceConversationId ? route('messages.conversation', ['conversationId' => $serviceConversationId]) : route('messages', ['serviceRequestId' => $sr->id]) }}" class="text-emerald-600 hover:text-emerald-700 font-medium text-sm" wire:navigate>
                     {{ __('messages.codes.chat_with') }} {{ $sr->service->user->name }}
                 </a>
             </div>

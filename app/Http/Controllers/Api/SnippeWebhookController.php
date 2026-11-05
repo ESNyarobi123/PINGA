@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\SubscriptionPurchaseNotAllowedException;
 use App\Http\Controllers\Controller;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\WingaNotification;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,28 +19,64 @@ class SnippeWebhookController extends Controller
     public function handle(Request $request)
     {
         $payload = $request->all();
-        Log::info('Snippe Webhook Receiver Hit', ['payload_id' => $payload['id'] ?? 'unknown']);
-
         $event = $payload['type'] ?? $payload['event'] ?? '';
-        $data = $payload['data'] ?? $payload;
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
+
         $status = $data['status'] ?? null;
         $reference = $data['reference'] ?? null;
-        $metadata = $data['metadata'] ?? [];
-        $userId = $metadata['user_id'] ?? $data['customer']['metadata']['user_id'] ?? null;
-        $amount = $data['amount']['value'] ?? 0;
 
-        // Detect subscription payments via metadata flag
-        $isSubscription = ($metadata['payment_type'] ?? '') === 'subscription';
-        $subscriptionId = $metadata['subscription_id'] ?? null;
+        $metadata = $this->resolveMetadata($payload, $data);
+        $orderId = $metadata['order_id'] ?? null;
+
+        Log::info('Snippe Webhook Receiver Hit', [
+            'payload_id' => $payload['id'] ?? 'unknown',
+            'event' => $event,
+            'reference' => $reference,
+            'order_id' => $orderId,
+        ]);
+
+        $isSuccess = in_array($event, ['payment.completed', 'payment.success', 'payment.successful'], true)
+            || in_array($status, ['completed', 'success', 'successful'], true);
+        $isFailure = in_array($event, ['payment.failed', 'payment.cancelled'], true)
+            || in_array($status, ['failed', 'cancelled'], true);
+
+        $pendingSubscription = $this->findPendingSubscription($reference, $orderId);
+        $isSubscription = ($metadata['payment_type'] ?? null) === 'subscription'
+            || $pendingSubscription !== null
+            || $this->looksLikeSubscriptionOrder($orderId)
+            || $this->looksLikeSubscriptionOrder($reference);
+
+        $userId = $metadata['user_id'] ?? $pendingSubscription?->user_id;
+        $subscriptionId = isset($metadata['subscription_id']) && is_numeric($metadata['subscription_id'])
+            ? (int) $metadata['subscription_id']
+            : $pendingSubscription?->id;
 
         Log::info('Snippe Webhook Processing', [
             'event' => $event,
             'status' => $status,
             'reference' => $reference,
             'user_id' => $userId,
-            'amount' => $amount,
+            'order_id' => $orderId,
             'is_subscription' => $isSubscription,
+            'subscription_id' => $subscriptionId,
         ]);
+
+        if ($isSubscription) {
+            if (! $userId && ! $subscriptionId) {
+                Log::warning('Snippe Webhook: subscription payment without user or subscription id', ['reference' => $reference]);
+
+                return response()->json(['status' => 'ignored']);
+            }
+
+            return $this->handleSubscriptionPayment(
+                $isSuccess,
+                $isFailure,
+                $userId,
+                $reference,
+                $orderId,
+                $subscriptionId,
+            );
+        }
 
         if (! $userId || ! $reference) {
             Log::warning('Snippe Webhook Ignored: Missing userId or reference', ['userId' => $userId, 'ref' => $reference]);
@@ -46,16 +84,7 @@ class SnippeWebhookController extends Controller
             return response()->json(['status' => 'ignored']);
         }
 
-        $isSuccess = $event === 'payment.completed' || $status === 'completed' || $status === 'success';
-        $isFailure = in_array($event, ['payment.failed', 'payment.cancelled'])
-                   || in_array($status, ['failed', 'cancelled']);
-
-        // ─── Subscription payment ────────────────────────────────────────
-        if ($isSubscription) {
-            return $this->handleSubscriptionPayment(
-                $isSuccess, $isFailure, $userId, $reference, $subscriptionId
-            );
-        }
+        $amount = $this->resolveAmount($data);
 
         // ─── Regular wallet deposit ──────────────────────────────────────
         if ($isSuccess) {
@@ -115,78 +144,219 @@ class SnippeWebhookController extends Controller
         return response()->json(['status' => 'success']);
     }
 
-    private function handleSubscriptionPayment(
-        bool $isSuccess,
-        bool $isFailure,
-        int|string $userId,
-        string $reference,
-        ?int $subscriptionId
-    ) {
-        if ($isSuccess) {
-            try {
-                DB::transaction(function () use ($userId, $reference, $subscriptionId) {
-                    $user = User::find($userId);
-                    if (! $user) {
-                        Log::error("Subscription Webhook: User {$userId} not found");
+    /**
+     * Snippe nests metadata in different places depending on the payment channel.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveMetadata(array $payload, array $data): array
+    {
+        $candidates = [
+            $data['metadata'] ?? null,
+            $payload['metadata'] ?? null,
+            $data['customer']['metadata'] ?? null,
+            $payload['customer']['metadata'] ?? null,
+            $data['payment']['metadata'] ?? null,
+        ];
 
-                        return;
-                    }
-
-                    // Find the pending subscription record
-                    $pending = $subscriptionId
-                        ? Subscription::find($subscriptionId)
-                        : Subscription::where('user_id', $userId)
-                            ->where('payment_reference', $reference)
-                            ->where('payment_status', 'pending')
-                            ->latest()
-                            ->first();
-
-                    if (! $pending) {
-                        Log::warning("Subscription Webhook: No pending record found for ref={$reference}");
-
-                        return;
-                    }
-
-                    $plan = $pending->subscriptionPlan()->first()
-                        ?? SubscriptionPlan::where('slug', $pending->plan_slug)->first();
-
-                    if (! $plan) {
-                        Log::error("Subscription Webhook: Plan not found for subscription {$pending->id}");
-
-                        return;
-                    }
-
-                    // Delete the pending placeholder and activate properly
-                    $pending->delete();
-
-                    /** @var SubscriptionService $service */
-                    $service = app(SubscriptionService::class);
-                    $service->activate($user, $plan, $reference, 'snippe');
-
-                    Log::info("Subscription activated via webhook: user={$userId} plan={$plan->slug}");
-                });
-            } catch (\Exception $e) {
-                Log::error('Subscription Webhook Success Error: '.$e->getMessage());
-            }
-        } elseif ($isFailure) {
-            try {
-                $pending = $subscriptionId
-                    ? Subscription::find($subscriptionId)
-                    : Subscription::where('user_id', $userId)
-                        ->where('payment_reference', $reference)
-                        ->where('payment_status', 'pending')
-                        ->latest()
-                        ->first();
-
-                if ($pending) {
-                    $pending->update(['payment_status' => 'failed', 'notes' => 'Snippe payment failed/cancelled']);
-                    Log::info("Subscription payment failed: user={$userId} ref={$reference}");
-                }
-            } catch (\Exception $e) {
-                Log::error('Subscription Webhook Failure Error: '.$e->getMessage());
+        $metadata = [];
+        foreach ($candidates as $candidate) {
+            if (is_array($candidate)) {
+                $metadata = array_merge($metadata, $candidate);
             }
         }
 
+        return $metadata;
+    }
+
+    private function resolveAmount(array $data): float
+    {
+        $amount = $data['amount'] ?? 0;
+
+        if (is_array($amount)) {
+            return (float) ($amount['value'] ?? 0);
+        }
+
+        return (float) $amount;
+    }
+
+    private function looksLikeSubscriptionOrder(?string $reference): bool
+    {
+        return $reference !== null && str_starts_with($reference, 'sub-');
+    }
+
+    private function findPendingSubscription(?string $reference, ?string $orderId): ?Subscription
+    {
+        $references = array_values(array_filter([$reference, $orderId]));
+
+        if ($references === []) {
+            return null;
+        }
+
+        $query = Subscription::query()
+            ->where('payment_status', 'pending')
+            ->where(function ($q) use ($references) {
+                $q->whereIn('payment_reference', $references);
+
+                if (\Illuminate\Support\Facades\Schema::hasColumn('subscriptions', 'provider_reference')) {
+                    $q->orWhereIn('provider_reference', $references);
+                }
+            });
+
+        return $query->latest('id')->first();
+    }
+
+    private function handleSubscriptionPayment(
+        bool $isSuccess,
+        bool $isFailure,
+        int|string|null $userId,
+        ?string $reference,
+        ?string $orderId,
+        ?int $subscriptionId,
+    ) {
+        $pending = $this->resolvePendingSubscription($userId, $reference, $orderId, $subscriptionId);
+
+        if (! $isSuccess && ! $isFailure) {
+            Log::info('Subscription Webhook: Unhandled event/status', [
+                'reference' => $reference,
+                'order_id' => $orderId,
+            ]);
+
+            return response()->json(['status' => 'success']);
+        }
+
+        if ($pending === null) {
+            Log::warning('Subscription Webhook: No pending subscription matched', [
+                'user_id' => $userId,
+                'reference' => $reference,
+                'order_id' => $orderId,
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            return response()->json(['status' => 'success']);
+        }
+
+        if ($isFailure) {
+            $pending->update([
+                'payment_status' => 'failed',
+                'notes' => 'Snippe payment failed/cancelled',
+            ]);
+            Log::info("Subscription payment failed: user={$pending->user_id} ref={$reference}");
+
+            return response()->json(['status' => 'success']);
+        }
+
+        // Idempotency: this payment reference already activated a subscription.
+        if ($reference && Subscription::where('payment_reference', $reference)
+            ->where('payment_status', 'completed')
+            ->exists()) {
+            Log::info('Subscription Webhook: payment already processed', ['reference' => $reference]);
+
+            return response()->json(['status' => 'success']);
+        }
+
+        $user = User::find($pending->user_id);
+        if (! $user) {
+            Log::error("Subscription Webhook: User {$pending->user_id} not found");
+
+            return response()->json(['status' => 'success']);
+        }
+
+        $plan = $pending->subscriptionPlan()->first()
+            ?? SubscriptionPlan::where('slug', $pending->plan_slug)->first();
+
+        if (! $plan) {
+            Log::error("Subscription Webhook: Plan not found for subscription {$pending->id}");
+
+            return response()->json(['status' => 'success']);
+        }
+
+        $activationReference = $reference ?: (string) $pending->payment_reference;
+
+        try {
+            DB::transaction(function () use ($user, $plan, $pending, $activationReference) {
+                /** @var SubscriptionService $service */
+                $service = app(SubscriptionService::class);
+                $service->activate($user, $plan, $activationReference, 'snippe');
+
+                if ($pending->exists) {
+                    $pending->update([
+                        'payment_status' => 'completed',
+                        'notes' => 'Activated via Snippe webhook',
+                    ]);
+                }
+            });
+
+            Log::info("Subscription activated via webhook: user={$user->id} plan={$plan->slug}");
+        } catch (SubscriptionPurchaseNotAllowedException $e) {
+            $this->alertAdmins(
+                'Subscription imelipwa lakini haikuwashwa',
+                "{$user->name} alilipa {$plan->name} (ref {$activationReference}) lakini activation imezuiwa: {$e->getMessage()}",
+            );
+
+            $pending->update(['notes' => 'Paid but activation blocked: '.$e->getMessage()]);
+
+            Log::error('Subscription Webhook: activation blocked', [
+                'user_id' => $user->id,
+                'plan' => $plan->slug,
+                'reference' => $activationReference,
+                'error' => $e->getMessage(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Subscription Webhook Success Error: '.$e->getMessage());
+
+            $this->alertAdmins(
+                'Subscription webhook error',
+                "Malipo ya subscription (ref {$activationReference}) yameshindwa kuactivate: {$e->getMessage()}",
+            );
+        }
+
         return response()->json(['status' => 'success']);
+    }
+
+    private function resolvePendingSubscription(
+        int|string|null $userId,
+        ?string $reference,
+        ?string $orderId,
+        ?int $subscriptionId,
+    ): ?Subscription {
+        if ($subscriptionId) {
+            $pending = Subscription::query()
+                ->whereKey($subscriptionId)
+                ->where('payment_status', 'pending')
+                ->first();
+
+            if ($pending) {
+                return $pending;
+            }
+        }
+
+        if ($pending = $this->findPendingSubscription($reference, $orderId)) {
+            return $pending;
+        }
+
+        if (! $userId) {
+            return null;
+        }
+
+        return Subscription::query()
+            ->where('user_id', $userId)
+            ->where('payment_status', 'pending')
+            ->latest('id')
+            ->first();
+    }
+
+    private function alertAdmins(string $title, string $message): void
+    {
+        User::where('role', 'admin')->get()->each(function (User $admin) use ($title, $message) {
+            $admin->notify(new WingaNotification(
+                title: $title,
+                message: $message,
+                icon: 'exclamation-triangle',
+                color: 'amber',
+                action_url: route('admin.subscriptions'),
+                action_label: 'Angalia Subscriptions',
+            ));
+        });
     }
 }

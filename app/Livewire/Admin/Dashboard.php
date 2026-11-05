@@ -58,7 +58,7 @@ class Dashboard extends Component
             'completed_jobs' => Job::where('status', 'completed')->count(),
             'disputed_jobs' => Job::where('status', 'disputed')->count(),
 
-            'revenue_today' => Payment::whereDate('created_at', today())
+            'revenue_today' => Payment::whereDate('escrow_released_at', today())
                 ->where('status', 'released')
                 ->sum('platform_fee'),
 
@@ -87,9 +87,9 @@ class Dashboard extends Component
 
         // Revenue Chart
         $revenueData = Payment::where('status', 'released')
-            ->where('created_at', '>=', $startDate)
-            ->groupByRaw('DATE(created_at)')
-            ->selectRaw('DATE(created_at) as date, SUM(platform_fee) as revenue')
+            ->where('escrow_released_at', '>=', $startDate)
+            ->groupByRaw('DATE(escrow_released_at)')
+            ->selectRaw('DATE(escrow_released_at) as date, SUM(platform_fee) as revenue')
             ->orderBy('date')
             ->get()
             ->map(fn ($item) => [

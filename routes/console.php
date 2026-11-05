@@ -9,6 +9,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('subscriptions:expire')->dailyAt('00:05');
+Schedule::command('subscriptions:reconcile')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('workers:update-badges')->dailyAt('01:00');
 Schedule::command('queue:work --stop-when-empty --max-time=55')->everyMinute()->withoutOverlapping();
 Schedule::command('app:release-expired-holds')->everyFifteenMinutes();

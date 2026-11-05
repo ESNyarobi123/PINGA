@@ -1560,6 +1560,9 @@ return [
         'placeholder' => 'Andika ujumbe...',
         'press' => 'Bonyeza',
         'to_send' => 'kutuma',
+        'empty_message' => 'Ujumbe hauwezi kuwa mtupu.',
+        'send' => 'Tuma',
+        'direct' => 'Mazungumzo ya moja kwa moja',
     ],
 
     // Shared - Notifications

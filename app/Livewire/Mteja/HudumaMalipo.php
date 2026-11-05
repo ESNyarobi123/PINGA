@@ -97,6 +97,17 @@ class HudumaMalipo extends Component
             return;
         }
 
+        $alreadyPaid = Payment::query()
+            ->where('service_request_id', $req->id)
+            ->whereIn('status', ['escrowed', 'released'])
+            ->exists();
+
+        if ($alreadyPaid) {
+            $this->closePaymentModal();
+
+            return;
+        }
+
         $workerBid = $req->agreedAmount();
         $fees = Payment::calculateFromWorkerBid($workerBid);
         $totalAmount = $fees['amount'];

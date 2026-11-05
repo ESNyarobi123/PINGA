@@ -2,10 +2,11 @@
 
 namespace App\Livewire\Shared;
 
+use App\Models\Application;
 use App\Models\Conversation;
 use App\Models\Job;
 use App\Models\Message;
-use App\Models\User;
+use App\Models\ServiceRequest;
 use App\Notifications\WingaNotification;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -27,13 +28,16 @@ class ChatBox extends Component
     // For starting a new conversation
     public ?int $jobId = null;
 
+    public ?int $serviceRequestId = null;
+
     public ?int $otherUserId = null;
 
-    public function mount(?int $conversationId = null, ?int $jobId = null, ?int $otherUserId = null): void
+    public function mount(?int $conversationId = null, ?int $jobId = null, ?int $otherUserId = null, ?int $serviceRequestId = null): void
     {
         $this->conversationId = $conversationId;
         $this->jobId = $jobId;
         $this->otherUserId = $otherUserId;
+        $this->serviceRequestId = $serviceRequestId;
 
         if ($this->conversationId) {
             $this->openConversation($this->conversationId);
@@ -43,11 +47,10 @@ class ChatBox extends Component
     public function openConversation(int $conversationId): void
     {
         $user = auth()->user();
-        $this->conversation = Conversation::where('id', $conversationId)
-            ->where(function ($q) use ($user) {
-                $q->where('employer_id', $user->id)->orWhere('worker_id', $user->id);
-            })
-            ->with(['job', 'employer', 'worker'])
+        $this->conversation = Conversation::query()
+            ->forUser($user->id)
+            ->whereKey($conversationId)
+            ->with(['job', 'serviceRequest.service', 'employer', 'worker'])
             ->firstOrFail();
 
         $this->conversationId = $conversationId;
@@ -71,6 +74,32 @@ class ChatBox extends Component
         $conversation = Conversation::firstOrCreate(
             ['job_id' => $jobId, 'employer_id' => $employerId, 'worker_id' => $workerId],
         );
+
+        $this->openConversation($conversation->id);
+    }
+
+    /**
+     * Start or open the conversation attached to a service request (client + winga).
+     */
+    public function startOrOpenServiceConversation(int $serviceRequestId): void
+    {
+        $user = auth()->user();
+
+        $request = ServiceRequest::query()
+            ->with('service:id,user_id,title')
+            ->findOrFail($serviceRequestId);
+
+        $wingaId = (int) $request->service->user_id;
+
+        if (! in_array($user->id, [$request->client_id, $wingaId], true)) {
+            abort(403);
+        }
+
+        $conversation = Conversation::firstOrCreate([
+            'service_request_id' => $request->id,
+            'employer_id' => $request->client_id,
+            'worker_id' => $wingaId,
+        ]);
 
         $this->openConversation($conversation->id);
     }
@@ -108,7 +137,7 @@ class ChatBox extends Component
 
     /**
      * Check if phone numbers should be masked in this conversation.
-     * Phone numbers are only visible if the worker has an accepted application for this job.
+     * Phone numbers are only visible once the work is paid into escrow.
      */
     protected function shouldMaskPhoneNumbers(): bool
     {
@@ -116,13 +145,22 @@ class ChatBox extends Component
             return true;
         }
 
-        // Check if there's an accepted application for this job and worker
-        $hasAcceptedApplication = \App\Models\Application::where('job_id', $this->conversation->job_id)
+        if ($this->conversation->service_request_id) {
+            $payment = $this->conversation->serviceRequest?->payment;
+
+            return ! $payment || ! in_array($payment->status, ['escrowed', 'released'], true);
+        }
+
+        // Direct member-to-member chat: keep phone numbers hidden until a paid job exists.
+        if (! $this->conversation->job_id) {
+            return true;
+        }
+
+        return ! Application::query()
+            ->where('job_id', $this->conversation->job_id)
             ->where('worker_id', $this->conversation->worker_id)
             ->where('status', 'accepted')
             ->exists();
-
-        return ! $hasAcceptedApplication;
     }
 
     /**
@@ -149,40 +187,47 @@ class ChatBox extends Component
 
     public function sendMessage(): void
     {
-        $this->validate(['newMessage' => 'required|string|max:2000']);
-
         if (! $this->conversation) {
             return;
         }
+
+        $body = trim($this->newMessage);
+
+        if ($body === '') {
+            $this->resetValidation();
+            $this->addError('newMessage', __('messages.chat_box.empty_message'));
+
+            return;
+        }
+
+        $this->validate(['newMessage' => 'required|string|max:2000']);
 
         $user = auth()->user();
 
         Message::create([
             'conversation_id' => $this->conversation->id,
             'sender_id' => $user->id,
-            'body' => $this->newMessage,
+            'body' => $body,
         ]);
 
         // Notify the other person
-        $otherId = $this->conversation->employer_id === $user->id
-            ? $this->conversation->worker_id
-            : $this->conversation->employer_id;
-
-        $other = User::find($otherId);
+        $other = $this->conversation->otherParty($user->id);
         if ($other) {
             $other->notify(new WingaNotification(
                 title: 'Ujumbe mpya kutoka '.$user->name,
-                message: substr($this->newMessage, 0, 80).(strlen($this->newMessage) > 80 ? '...' : ''),
+                message: substr($body, 0, 80).(strlen($body) > 80 ? '...' : ''),
                 icon: 'chat-bubble-left-right',
                 color: 'blue',
-                action_url: url('/messages/'.$this->conversation->id),
+                action_url: route('messages.conversation', ['conversationId' => $this->conversation->id]),
                 action_label: 'Soma Ujumbe',
             ));
         }
 
         $this->newMessage = '';
+        $this->resetValidation();
         $this->conversation->markAsRead($user->id);
         $this->loadMessages();
+        $this->dispatch('chat-message-sent');
     }
 
     public function poll(): void

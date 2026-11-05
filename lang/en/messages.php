@@ -1557,6 +1557,9 @@ return [
         'placeholder' => 'Write a message...',
         'press' => 'Press',
         'to_send' => 'to send',
+        'empty_message' => 'Message cannot be empty.',
+        'send' => 'Send',
+        'direct' => 'Direct conversation',
     ],
 
     // Shared - Notifications

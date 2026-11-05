@@ -55,6 +55,11 @@ class ServiceRequest extends Model
         return $this->hasOne(Payment::class, 'service_request_id');
     }
 
+    public function conversation(): HasOne
+    {
+        return $this->hasOne(Conversation::class, 'service_request_id');
+    }
+
     public function isPending(): bool
     {
         return $this->status === 'pending';

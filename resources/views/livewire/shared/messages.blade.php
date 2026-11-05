@@ -32,7 +32,7 @@
                                     <p class="text-sm font-bold text-zinc-900 dark:text-white truncate group-hover:text-emerald-600 transition-colors">{{ $conv['other_name'] }}</p>
                                     <span class="text-[10px] text-zinc-500 dark:text-zinc-400 flex-shrink-0">{{ $conv['last_time'] }}</span>
                                 </div>
-                                <p class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate mb-1">{{ $conv['job_title'] }}</p>
+                                <p class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate mb-1">{{ $conv['context_title'] }}</p>
                                 <p class="text-xs text-zinc-600 dark:text-zinc-400 truncate">{{ Str::limit($conv['last_message'], 35) }}</p>
                             </div>
                         </button>
@@ -68,7 +68,7 @@
                         <img src="{{ $activeConv['other_avatar'] }}" class="w-10 h-10 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700" alt="">
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-bold text-zinc-900 dark:text-white truncate">{{ $activeConv['other_name'] }}</p>
-                            <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 truncate">{{ $activeConv['job_title'] }}</p>
+                            <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 truncate">{{ $activeConv['context_title'] }}</p>
                         </div>
                         <div class="hidden sm:flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full">
                             <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>

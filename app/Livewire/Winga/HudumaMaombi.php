@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Winga;
 
+use App\Models\Conversation;
 use App\Models\ServiceRequest;
 use App\Notifications\WingaNotification;
 use App\Support\ServicePackageSchema;
@@ -40,6 +41,12 @@ class HudumaMaombi extends Component
 
         $req->update(['status' => 'accepted', 'responded_at' => now()]);
 
+        $conversation = Conversation::firstOrCreate([
+            'service_request_id' => $req->id,
+            'employer_id' => $req->client_id,
+            'worker_id' => (int) $req->service->user_id,
+        ]);
+
         $req->client->notify(new WingaNotification(
             title: __('messages.huduma_maombi.notify_accepted_title'),
             message: __('messages.huduma_maombi.notify_accepted_body', [
@@ -49,8 +56,8 @@ class HudumaMaombi extends Component
             ]),
             icon: 'check-circle',
             color: 'green',
-            action_url: route('mteja.huduma-malipo'),
-            action_label: __('messages.huduma_maombi.notify_action_pay'),
+            action_url: route('messages.conversation', ['conversationId' => $conversation->id]),
+            action_label: __('messages.huduma_maombi.notify_action_messages'),
         ));
 
         $this->dispatch('toast', message: __('messages.huduma_maombi.toast_accepted'), type: 'success');
@@ -89,6 +96,7 @@ class HudumaMaombi extends Component
         $req = $this->findOwnedRequest($id);
         if (! $req || ! $req->isPending()) {
             $this->closeDeclineModal();
+
             return;
         }
 
@@ -135,7 +143,7 @@ class HudumaMaombi extends Component
      */
     private function requestListWith(): array
     {
-        $with = ['service.category', 'client:id,name,avatar', 'payment'];
+        $with = ['service.category', 'client:id,name,avatar', 'payment', 'conversation'];
         if (ServicePackageSchema::hasPackagesTable()) {
             $with[] = 'package';
         }
@@ -148,7 +156,7 @@ class HudumaMaombi extends Component
      */
     private function requestDetailWith(): array
     {
-        $with = ['service', 'client', 'payment'];
+        $with = ['service', 'client', 'payment', 'conversation'];
         if (ServicePackageSchema::hasPackagesTable()) {
             $with[] = 'package';
         }

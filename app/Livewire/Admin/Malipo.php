@@ -4,9 +4,12 @@ namespace App\Livewire\Admin;
 
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Models\SubscriptionPayment;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\SettingsService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -248,30 +251,87 @@ class Malipo extends Component
     }
 
     // Stats
+    /**
+     * Platform commission from released jobs/services plus 100% of subscription payments.
+     */
     public function getTotalRevenueProperty(): float
     {
-        return Payment::where('status', 'released')->sum('platform_fee');
+        return $this->commissionRevenue() + $this->subscriptionRevenue();
+    }
+
+    public function getCommissionRevenueProperty(): float
+    {
+        return $this->commissionRevenue();
+    }
+
+    public function getSubscriptionRevenueProperty(): float
+    {
+        return $this->subscriptionRevenue();
     }
 
     public function getMonthlyRevenueProperty(): float
     {
+        $startOfMonth = now()->startOfMonth();
+
         return Payment::where('status', 'released')
-            ->whereMonth('created_at', now()->month)
-            ->sum('platform_fee');
+            ->where('escrow_released_at', '>=', $startOfMonth)
+            ->sum('platform_fee')
+            + $this->subscriptionRevenueBetween($startOfMonth, now());
     }
 
     public function getTodayRevenueProperty(): float
     {
         return Payment::where('status', 'released')
-            ->whereDate('created_at', now()->today())
-            ->sum('platform_fee');
+            ->whereDate('escrow_released_at', today())
+            ->sum('platform_fee')
+            + $this->subscriptionRevenueBetween(today()->startOfDay(), today()->endOfDay());
     }
 
     public function getYesterdayRevenueProperty(): float
     {
+        $yesterday = now()->subDay()->startOfDay();
+
         return Payment::where('status', 'released')
-            ->whereDate('created_at', now()->subDay())
-            ->sum('platform_fee');
+            ->whereDate('escrow_released_at', $yesterday)
+            ->sum('platform_fee')
+            + $this->subscriptionRevenueBetween($yesterday, $yesterday->copy()->endOfDay());
+    }
+
+    private function commissionRevenue(): float
+    {
+        return (float) Payment::where('status', 'released')->sum('platform_fee');
+    }
+
+    private function subscriptionRevenue(): float
+    {
+        $ledger = (float) SubscriptionPayment::query()->sum('amount');
+
+        if ($ledger > 0) {
+            return $ledger;
+        }
+
+        return (float) Subscription::query()
+            ->whereIn('status', ['active', 'expired'])
+            ->where('payment_status', 'completed')
+            ->sum('amount_paid');
+    }
+
+    private function subscriptionRevenueBetween(\Carbon\CarbonInterface $from, \Carbon\CarbonInterface $to): float
+    {
+        $ledger = (float) SubscriptionPayment::query()
+            ->whereBetween('paid_at', [$from, $to])
+            ->sum('amount');
+
+        if ($ledger > 0) {
+            return $ledger;
+        }
+
+        // Legacy fallback: subscriptions without ledger rows.
+        return (float) Subscription::query()
+            ->whereIn('status', ['active', 'expired'])
+            ->where('payment_status', 'completed')
+            ->whereBetween('created_at', [$from, $to])
+            ->sum('amount_paid');
     }
 
     public function getCurrentEscrowBalanceProperty(): float
@@ -305,7 +365,7 @@ class Malipo extends Component
     // Actions
     public function releaseEscrow(int $paymentId): void
     {
-        $payment = Payment::findOrFail($paymentId);
+        $payment = Payment::with(['job', 'serviceRequest.service', 'worker'])->findOrFail($paymentId);
 
         if ($payment->status !== 'escrowed') {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
@@ -313,14 +373,55 @@ class Malipo extends Component
             return;
         }
 
-        $platformFee = $payment->amount * (SettingsService::commissionRate() / 100);
-        $workerAmount = $payment->amount - $platformFee;
+        $fees = Payment::calculateFromWorkerBid((float) $payment->amount);
+        $released = DB::transaction(function () use ($payment, $fees) {
+            $locked = Payment::query()->lockForUpdate()->find($payment->id);
 
-        // Mark escrow as released
-        $payment->update(['status' => 'released']);
+            if (! $locked || $locked->status !== 'escrowed') {
+                return false;
+            }
+
+            $locked->update([
+                'platform_fee' => $fees['platform_fee'],
+                'worker_amount' => $fees['worker_amount'],
+                'status' => 'released',
+                'payout_status' => 'completed',
+                'escrow_released_at' => now(),
+            ]);
+
+            $worker = $locked->worker;
+            $label = ($locked->job_id ? 'Malipo ya kazi: ' : 'Malipo ya huduma: ').$locked->escrowItemLabel();
+
+            $alreadyCredited = $worker && Transaction::query()
+                ->where('payment_id', $locked->id)
+                ->where('type', 'credit')
+                ->exists();
+
+            if ($worker && ! $alreadyCredited) {
+                $worker->increment('wallet_balance', (float) $fees['worker_amount']);
+
+                Transaction::create([
+                    'user_id' => $worker->id,
+                    'payment_id' => $locked->id,
+                    'type' => 'credit',
+                    'amount' => (float) $fees['worker_amount'],
+                    'description' => $label,
+                    'balance_after' => $worker->fresh()->wallet_balance,
+                    'status' => 'completed',
+                ]);
+            }
+
+            return true;
+        });
+
+        if (! $released) {
+            $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
+
+            return;
+        }
 
         $this->logAdminAction('release_escrow', $payment, [
-            'amount' => $payment->worker_amount,
+            'amount' => $fees['worker_amount'],
         ]);
 
         $this->dispatch('toast', message: 'Escrow released successfully', type: 'success');
@@ -482,6 +583,16 @@ class Malipo extends Component
      */
     public function subscriptionMonthlyTotalByPlan(string $planSlug): float
     {
+        $ledgerTotal = (float) SubscriptionPayment::query()
+            ->where('plan_slug', $planSlug)
+            ->where('paid_at', '>=', now()->startOfMonth())
+            ->sum('amount');
+
+        if ($ledgerTotal > 0) {
+            return $ledgerTotal;
+        }
+
+        // Legacy rows that predate the payment ledger.
         return (float) Subscription::query()
             ->where(function ($q) use ($planSlug) {
                 $q->whereHas('subscriptionPlan', fn ($q2) => $q2->where('slug', $planSlug))

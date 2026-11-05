@@ -59,7 +59,7 @@
                             <flux:button size="sm" variant="primary" wire:click="accept({{ $req->id }})" wire:loading.attr="disabled">{{ __('messages.huduma_maombi.accept') }}</flux:button>
                             <flux:button size="sm" variant="ghost" wire:click="openDeclineModal({{ $req->id }})" wire:loading.attr="disabled">{{ __('messages.huduma_maombi.decline') }}</flux:button>
                         @endif
-                        <flux:button size="sm" :href="route('messages')" variant="outline" wire:navigate>{{ __('messages.huduma_maombi.open_messages') }}</flux:button>
+                        <flux:button size="sm" :href="$req->conversation ? route('messages.conversation', ['conversationId' => $req->conversation->id]) : route('messages', ['serviceRequestId' => $req->id])" variant="outline" wire:navigate>{{ __('messages.huduma_maombi.open_messages') }}</flux:button>
                     </div>
                 </div>
             @endforeach

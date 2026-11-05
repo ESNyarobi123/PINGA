@@ -173,7 +173,10 @@
 
                             @if($application->status === 'accepted')
                                 {{-- Task 9: Chat + Pay buttons for accepted applications --}}
-                                <a href="{{ route('messages') }}" class="group/btn px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200" wire:navigate>
+                                @php
+                                    $applicationConversationId = $conversationIds[$application->job_id.'-'.$application->worker_id] ?? null;
+                                @endphp
+                                <a href="{{ $applicationConversationId ? route('messages.conversation', ['conversationId' => $applicationConversationId]) : route('messages') }}" class="group/btn px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-medium rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200" wire:navigate>
                                     <span class="flex items-center gap-1">
                                         <svg class="w-3.5 h-3.5 group-hover/btn:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
@@ -370,7 +373,7 @@
             </div>
 
             <div class="space-y-2">
-                <a href="{{ route('messages') }}" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-semibold rounded-xl hover:shadow-lg transition-all" wire:navigate>
+                <a href="{{ $acceptedConversationId ? route('messages.conversation', ['conversationId' => $acceptedConversationId]) : route('messages') }}" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-semibold rounded-xl hover:shadow-lg transition-all" wire:navigate>
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                     Chat na Winga
                 </a>

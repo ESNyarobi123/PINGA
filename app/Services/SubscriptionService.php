@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\SubscriptionPurchaseNotAllowedException;
 use App\Models\Subscription;
+use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
@@ -92,10 +93,16 @@ class SubscriptionService
                 );
             }
 
-            return $this->renewSubscription($user, $active, $plan, $paymentReference, $paymentMethod);
+            $subscription = $this->renewSubscription($user, $active, $plan, $paymentReference, $paymentMethod);
+            $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod);
+
+            return $subscription;
         }
 
-        return $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+        $subscription = $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+        $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod);
+
+        return $subscription;
     }
 
     /**
@@ -189,10 +196,50 @@ class SubscriptionService
         bool $forceReplace = false
     ): Subscription {
         if ($forceReplace) {
-            return $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+            $subscription = $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
+            $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod);
+
+            return $subscription;
         }
 
         return $this->fulfillAfterPayment($user, $plan, $paymentReference, $paymentMethod);
+    }
+
+    /**
+     * Record one row per actual payment so renewals are not lost from monthly revenue.
+     */
+    protected function recordLedgerPayment(
+        Subscription $subscription,
+        User $user,
+        SubscriptionPlan $plan,
+        string $paymentReference,
+        string $paymentMethod,
+        ?string $providerReference = null,
+    ): void {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('subscription_payments')) {
+            return;
+        }
+
+        $attributes = [
+            'user_id' => $user->id,
+            'subscription_plan_id' => $plan->id,
+            'plan_slug' => $plan->slug,
+            'amount' => $plan->price,
+            'payment_method' => $paymentMethod,
+            'paid_at' => now(),
+        ];
+
+        if ($providerReference && \Illuminate\Support\Facades\Schema::hasColumn('subscription_payments', 'provider_reference')) {
+            $attributes['provider_reference'] = $providerReference;
+        }
+
+        SubscriptionPayment::query()->firstOrCreate(
+            [
+                'subscription_id' => $subscription->id,
+                'payment_reference' => $paymentReference,
+            ],
+            $attributes
+        );
     }
 
     /**

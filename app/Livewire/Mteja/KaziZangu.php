@@ -3,6 +3,7 @@
 namespace App\Livewire\Mteja;
 
 use App\Models\Category;
+use App\Models\Conversation;
 use App\Models\Job;
 use App\Notifications\WingaNotification;
 use Illuminate\Validation\Rule;
@@ -177,12 +178,18 @@ class KaziZangu extends Component
         $job->holdCode(3);
 
         if ($job->hiredWorker) {
+            $conversation = Conversation::firstOrCreate([
+                'job_id' => $job->id,
+                'employer_id' => $job->employer_id,
+                'worker_id' => $job->hired_worker_id,
+            ]);
+
             $job->hiredWorker->notify(new WingaNotification(
                 title: '⏸️ Malipo Yameshikiliwa Muda',
                 message: 'Muajili ameweka kazi "'.$job->title.'" kwenye tathmini kwa masaa 3. Wasiliana nao ili utatue tatizo kabla ya muda haujaisha.',
                 icon: 'clock',
                 color: 'amber',
-                action_url: route('messages'),
+                action_url: route('messages.conversation', ['conversationId' => $conversation->id]),
                 action_label: 'Fungua Chat',
             ));
         }

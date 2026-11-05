@@ -123,7 +123,10 @@ class Subscription extends Component
             orderId: $orderId,
         );
 
-        if ($result && isset($result['id'])) {
+        if ($result && (isset($result['id']) || isset($result['data']['reference']) || ($result['status'] ?? null) === 'success')) {
+            $providerReference = $result['data']['reference'] ?? $result['reference'] ?? null;
+            $this->rememberProviderReference($pending, $orderId, $providerReference);
+
             $this->showConfirm = false;
             $this->selectedPlanId = null;
             $this->dispatch('toast',
@@ -131,7 +134,7 @@ class Subscription extends Component
                 type: 'info',
             );
         } else {
-            $pending->delete();
+            $pending->update(['payment_status' => 'failed', 'notes' => 'Snippe mobile payment request failed']);
             $this->dispatch('toast', message: 'Malipo hayakufanikiwa. Jaribu tena au tumia njia nyingine.', type: 'error');
         }
     }
@@ -161,12 +164,36 @@ class Subscription extends Component
             orderId: $orderId,
         );
 
-        if ($result && isset($result['data']['authorization_url'])) {
-            $this->redirect($result['data']['authorization_url'], navigate: false);
+        if ($result && (isset($result['data']['authorization_url']) || isset($result['data']['payment_url']))) {
+            $providerReference = $result['data']['reference'] ?? $result['reference'] ?? null;
+            $this->rememberProviderReference($pending, $orderId, $providerReference);
+
+            $this->redirect($result['data']['authorization_url'] ?? $result['data']['payment_url'], navigate: false);
         } else {
-            $pending->delete();
+            $pending->update(['payment_status' => 'failed', 'notes' => 'Snippe card payment request failed']);
             $this->dispatch('toast', message: 'Malipo ya kadi hayakufanikiwa. Jaribu tena.', type: 'error');
         }
+    }
+
+    /**
+     * Persist Snippe's payment reference. Falls back to notes when the
+     * provider_reference column has not been migrated yet (avoids hard crash).
+     */
+    private function rememberProviderReference($pending, string $orderId, ?string $providerReference): void
+    {
+        $notes = 'order_id='.$orderId;
+
+        if ($providerReference) {
+            $notes .= '|provider_reference='.$providerReference;
+        }
+
+        $payload = ['notes' => $notes];
+
+        if ($providerReference && \Illuminate\Support\Facades\Schema::hasColumn('subscriptions', 'provider_reference')) {
+            $payload['provider_reference'] = $providerReference;
+        }
+
+        $pending->update($payload);
     }
 
     public function render()

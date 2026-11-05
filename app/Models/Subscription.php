@@ -21,6 +21,7 @@ class Subscription extends Model
         'status',
         'payment_status',
         'payment_reference',
+        'provider_reference',
         'payment_method',
         'payment_type',
         'notes',
@@ -46,6 +47,14 @@ class Subscription extends Model
     public function subscriptionPlan()
     {
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
+    }
+
+    /**
+     * Individual payments recorded for this subscription (renewals included).
+     */
+    public function payments()
+    {
+        return $this->hasMany(SubscriptionPayment::class);
     }
 
     public function isActive(): bool

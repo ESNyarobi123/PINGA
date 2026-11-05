@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Mteja;
 
+use App\Models\Conversation;
 use App\Models\Job;
 use App\Models\ServiceRequest;
 use App\Notifications\WingaNotification;
@@ -47,6 +48,24 @@ class Codes extends Component
         }
 
         $this->dispatch('toast', message: __('messages.codes.toast_code_generated'), type: 'success');
+    }
+
+    /**
+     * Deep link to the conversation for a job or service request, when one exists.
+     */
+    private function conversationUrl(?int $jobId = null, ?int $serviceRequestId = null, ?int $workerId = null): string
+    {
+        $conversation = Conversation::query()
+            ->where('employer_id', auth()->id())
+            ->when($jobId, fn ($q) => $q->where('job_id', $jobId))
+            ->when($serviceRequestId, fn ($q) => $q->where('service_request_id', $serviceRequestId))
+            ->when($workerId, fn ($q) => $q->where('worker_id', $workerId))
+            ->latest('id')
+            ->first();
+
+        return $conversation
+            ? route('messages.conversation', ['conversationId' => $conversation->id])
+            : route('messages');
     }
 
     public function generateServiceRequestCode(int $serviceRequestId): void
@@ -101,7 +120,7 @@ class Codes extends Component
                 message: __('messages.codes.notify_hold_job', ['title' => $job->title]),
                 icon: 'clock',
                 color: 'amber',
-                action_url: route('messages'),
+                action_url: $this->conversationUrl(jobId: $job->id, workerId: $job->hired_worker_id),
                 action_label: __('messages.codes.notify_hold_action')
             ));
         }
@@ -131,7 +150,7 @@ class Codes extends Component
                 message: __('messages.codes.notify_hold_service', ['title' => $req->service->title]),
                 icon: 'clock',
                 color: 'amber',
-                action_url: route('messages'),
+                action_url: $this->conversationUrl(serviceRequestId: $req->id),
                 action_label: __('messages.codes.notify_hold_action')
             ));
         }
@@ -204,7 +223,7 @@ class Codes extends Component
                 ]),
                 icon: 'clock',
                 color: 'amber',
-                action_url: route('messages'),
+                action_url: $this->conversationUrl(jobId: $job->id, workerId: $job->hired_worker_id),
                 action_label: __('messages.codes.notify_hold_action')
             ));
         }
@@ -242,7 +261,7 @@ class Codes extends Component
                 ]),
                 icon: 'clock',
                 color: 'amber',
-                action_url: route('messages'),
+                action_url: $this->conversationUrl(serviceRequestId: $req->id),
                 action_label: __('messages.codes.notify_hold_action')
             ));
         }
@@ -277,6 +296,19 @@ class Codes extends Component
             'jobs' => $jobs,
             'serviceRequests' => $serviceRequests,
             'usesServicePackages' => ServicePackageSchema::hasPackagesTable(),
+            'jobConversationIds' => Conversation::query()
+                ->where('employer_id', auth()->id())
+                ->whereNotNull('job_id')
+                ->get(['id', 'job_id', 'worker_id'])
+                ->mapWithKeys(fn ($conversation) => [
+                    $conversation->job_id.'-'.$conversation->worker_id => $conversation->id,
+                ])
+                ->all(),
+            'serviceConversationIds' => Conversation::query()
+                ->where('employer_id', auth()->id())
+                ->whereNotNull('service_request_id')
+                ->pluck('id', 'service_request_id')
+                ->all(),
         ])->layout('layouts.mteja')
             ->title(__('messages.codes.title'));
     }

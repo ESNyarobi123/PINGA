@@ -1,13 +1,13 @@
-<div class="h-full flex flex-col bg-zinc-50 dark:bg-zinc-950" wire:poll.5s="poll">
-    {{-- Messages Area --}}
-    <div class="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3" id="chat-messages">
+<div class="h-full flex flex-col bg-zinc-50 dark:bg-zinc-950">
+    {{-- Messages Area (poll scoped here so the composer is never re-rendered mid-typing) --}}
+    <div class="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3" id="chat-messages" wire:poll.5s="poll">
         @forelse($messages as $msg)
             <div class="flex items-end gap-2.5 {{ $msg['is_mine'] ? 'flex-row-reverse' : '' }}" wire:key="msg-{{ $msg['id'] }}">
                 @if(!$msg['is_mine'])
                     <img src="{{ $msg['sender_avatar'] }}" class="w-8 h-8 rounded-full flex-shrink-0 object-cover border-2 border-zinc-200 dark:border-zinc-700" alt="">
                 @endif
                 <div class="max-w-[75%] sm:max-w-[65%] {{ $msg['is_mine'] ? 'items-end' : 'items-start' }} flex flex-col gap-1">
-                    <div class="px-3.5 py-2 text-sm leading-relaxed shadow-sm
+                    <div class="px-3.5 py-2 text-sm leading-relaxed shadow-sm whitespace-pre-line break-words
                         {{ $msg['is_mine']
                             ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl rounded-br-md'
                             : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-2xl rounded-bl-md' }}">
@@ -27,21 +27,29 @@
 
     {{-- Input Area --}}
     <div class="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 sm:px-5 py-3.5">
-        <form wire:submit="sendMessage" class="flex items-end gap-2.5">
+        <form wire:submit="sendMessage" class="flex items-end gap-2.5" x-data="{ text: '' }">
             <div class="flex-1 relative">
                 <textarea
                     wire:model="newMessage"
+                    x-model="text"
                     placeholder="{{ __('messages.chat_box.placeholder') }}"
                     rows="1"
-                    class="w-full bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm resize-none border border-zinc-200 dark:border-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all"
-                    x-data
-                    x-on:keydown.enter.prevent="if(!$event.shiftKey) { $wire.sendMessage() }"
+                    class="w-full bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm resize-none border transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20
+                        @error('newMessage') border-red-500 focus:border-red-500 @else border-zinc-200 dark:border-zinc-700 focus:border-emerald-500 @enderror"
+                    x-on:keydown.enter.prevent="if (! $event.shiftKey) { $el.form.requestSubmit() }"
+                    x-on:chat-message-sent.window="text = ''"
                 ></textarea>
+                @error('newMessage')
+                    <p class="text-xs text-red-500 dark:text-red-400 mt-1">{{ $message }}</p>
+                @enderror
             </div>
             <button
                 type="submit"
-                class="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:scale-105"
+                title="{{ __('messages.chat_box.send') }}"
+                class="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                x-bind:disabled="text.trim() === ''"
                 wire:loading.attr="disabled"
+                wire:target="sendMessage"
             >
                 <svg wire:loading.remove wire:target="sendMessage" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
@@ -57,13 +65,19 @@
 </div>
 
 <script>
-    // Auto-scroll to bottom on new messages smoothly
-    document.addEventListener('livewire:update', () => {
-        const el = document.getElementById('chat-messages');
-        if (el) el.scrollTop = el.scrollHeight;
+    document.addEventListener('livewire:init', () => {
+        Livewire.hook('morph.updated', () => {
+            const el = document.getElementById('chat-messages');
+            if (el) {
+                el.scrollTop = el.scrollHeight;
+            }
+        });
     });
-    window.addEventListener('load', () => {
+
+    document.addEventListener('DOMContentLoaded', () => {
         const el = document.getElementById('chat-messages');
-        if (el) el.scrollTop = el.scrollHeight;
+        if (el) {
+            el.scrollTop = el.scrollHeight;
+        }
     });
 </script>

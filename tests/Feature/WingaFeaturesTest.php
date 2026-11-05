@@ -419,8 +419,8 @@ test('snippe webhook activates pending subscription on success', function () {
         'CONTENT_TYPE' => 'application/json',
     ], $body)->assertJson(['status' => 'success']);
 
-    // Pending record deleted, new active one created
-    expect(Subscription::find($pending->id))->toBeNull();
+    // Pending row is kept for audit/idempotency and marked completed.
+    expect($pending->fresh()->payment_status)->toBe('completed');
     expect(
         Subscription::where('user_id', $worker->id)
             ->where('status', 'active')
