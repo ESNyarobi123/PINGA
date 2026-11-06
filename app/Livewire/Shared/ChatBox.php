@@ -146,9 +146,12 @@ class ChatBox extends Component
         }
 
         if ($this->conversation->service_request_id) {
-            $payment = $this->conversation->serviceRequest?->payment;
+            $paid = \App\Models\Payment::query()
+                ->where('service_request_id', $this->conversation->service_request_id)
+                ->whereIn('status', ['escrowed', 'released'])
+                ->exists();
 
-            return ! $payment || ! in_array($payment->status, ['escrowed', 'released'], true);
+            return ! $paid;
         }
 
         // Direct member-to-member chat: keep phone numbers hidden until a paid job exists.

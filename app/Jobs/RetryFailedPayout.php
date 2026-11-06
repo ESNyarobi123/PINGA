@@ -39,6 +39,14 @@ class RetryFailedPayout implements ShouldQueue
                 return;
             }
 
+            // The payout webhook refunds the wallet and marks the request rejected.
+            // Retrying it automatically would pay the user a second time.
+            if (in_array($withdrawal->status, ['rejected', 'refunded'], true)) {
+                Log::info("RetryFailedPayout: withdrawal {$this->withdrawalId} was already refunded; skipping.");
+
+                return;
+            }
+
             $worker = User::find($this->workerId);
             if (! $worker) {
                 return;
@@ -76,6 +84,12 @@ class RetryFailedPayout implements ShouldQueue
             $payment = Payment::with(['worker', 'job'])->find($this->paymentId);
 
             if (! $payment || $payment->payout_status === 'completed') {
+                return;
+            }
+
+            if ($payment->status === 'refunded') {
+                Log::info("RetryFailedPayout: payment {$this->paymentId} was refunded; skipping.");
+
                 return;
             }
 

@@ -16,14 +16,13 @@ beforeEach(function () {
 });
 
 test('two factor settings page can be rendered', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['two_factor_enabled' => false]);
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
         ->get(route('two-factor.show'))
         ->assertOk()
-        ->assertSee('Two-factor authentication')
-        ->assertSee('Disabled');
+        ->assertSee('Two-factor authentication');
 });
 
 test('two factor settings page requires password confirmation when enabled', function () {
@@ -35,36 +34,28 @@ test('two factor settings page requires password confirmation when enabled', fun
     $response->assertRedirect(route('password.confirm'));
 });
 
-test('two factor settings page returns forbidden response when two factor is disabled', function () {
-    config(['fortify.features' => []]);
-
-    $user = User::factory()->create();
-
-    $response = $this->actingAs($user)
-        ->withSession(['auth.password_confirmed_at' => time()])
-        ->get(route('two-factor.show'));
-
-    $response->assertForbidden();
-});
-
-test('two factor authentication disabled when confirmation abandoned between requests', function () {
-    $user = User::factory()->create();
-
-    $user->forceFill([
-        'two_factor_secret' => encrypt('test-secret'),
-        'two_factor_recovery_codes' => encrypt(json_encode(['code1', 'code2'])),
-        'two_factor_confirmed_at' => null,
-    ])->save();
+test('enabling two factor switches the user over to email otp', function () {
+    $user = User::factory()->create(['two_factor_enabled' => false]);
 
     $this->actingAs($user);
 
-    $component = Livewire::test('pages::settings.two-factor');
+    Livewire::test('pages::settings.two-factor')
+        ->assertSet('twoFactorEnabled', false)
+        ->call('enable')
+        ->assertSet('twoFactorEnabled', true);
 
-    $component->assertSet('twoFactorEnabled', false);
+    expect((bool) $user->fresh()->two_factor_enabled)->toBeTrue();
+});
 
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'two_factor_secret' => null,
-        'two_factor_recovery_codes' => null,
-    ]);
+test('disabling two factor turns email otp off again', function () {
+    $user = User::factory()->create(['two_factor_enabled' => true]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::settings.two-factor')
+        ->assertSet('twoFactorEnabled', true)
+        ->call('disable')
+        ->assertSet('twoFactorEnabled', false);
+
+    expect((bool) $user->fresh()->two_factor_enabled)->toBeFalse();
 });

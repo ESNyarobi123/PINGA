@@ -3,6 +3,7 @@
 namespace App\Livewire\Winga;
 
 use App\Models\Job;
+use App\Models\Payment;
 use App\Models\ServiceRequest;
 use App\Models\Transaction;
 use App\Models\User;
@@ -150,7 +151,12 @@ class WekaCode extends Component
 
         DB::transaction(function () use ($job) {
             $worker = auth()->user();
-            $payment = $job->payment;
+            $payment = Payment::query()
+                ->where('job_id', $job->id)
+                ->where('status', 'escrowed')
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
 
             $job->update([
                 'status' => 'completed',
@@ -198,7 +204,7 @@ class WekaCode extends Component
             ));
         }
 
-        $payment = $job->fresh()->payment;
+        $payment = Payment::query()->where('job_id', $job->id)->latest('id')->first();
         auth()->user()->notify(new WingaNotification(
             title: __('messages.weka_code.notify_worker_paid_title'),
             message: __('messages.weka_code.notify_worker_paid_body', [
@@ -241,7 +247,12 @@ class WekaCode extends Component
 
         DB::transaction(function () use ($req) {
             $worker = auth()->user();
-            $payment = $req->payment;
+            $payment = Payment::query()
+                ->where('service_request_id', $req->id)
+                ->where('status', 'escrowed')
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
 
             $req->update([
                 'status' => 'completed',
@@ -291,7 +302,7 @@ class WekaCode extends Component
             ));
         }
 
-        $payment = $req->fresh()->payment;
+        $payment = Payment::query()->where('service_request_id', $req->id)->latest('id')->first();
         auth()->user()->notify(new WingaNotification(
             title: __('messages.weka_code.notify_worker_paid_title'),
             message: __('messages.weka_code.notify_worker_paid_body', [

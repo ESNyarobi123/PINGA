@@ -1,7 +1,11 @@
 <?php
 
+use App\Livewire\Auth\Login;
+use App\Livewire\Auth\VerifyOtp;
+use App\Mail\SendOtpMail;
 use App\Models\User;
-use Laravel\Fortify\Features;
+use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
 
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
@@ -37,25 +41,54 @@ test('users can not authenticate with invalid password', function () {
     $this->assertGuest();
 });
 
-test('users with two factor enabled are redirected to two factor challenge', function () {
-    if (! Features::canManageTwoFactorAuthentication()) {
-        $this->markTestSkipped('Two-factor authentication is not enabled.');
-    }
+test('users with two factor enabled are redirected to email otp verification', function () {
+    Mail::fake();
 
-    Features::twoFactorAuthentication([
-        'confirm' => true,
-        'confirmPassword' => true,
+    $user = User::factory()->create([
+        'role' => 'winga',
+        'two_factor_enabled' => true,
     ]);
 
-    $user = User::factory()->withTwoFactor()->create();
+    Livewire::test(Login::class)
+        ->set('email', $user->email)
+        ->set('password', 'password')
+        ->call('login')
+        ->assertRedirect(route('verify-otp'));
 
-    $response = $this->post(route('login.store'), [
-        'email' => $user->email,
-        'password' => 'password',
-    ]);
-
-    $response->assertRedirect(route('two-factor.login'));
+    expect(session('pending_user_id'))->toBe($user->id);
+    Mail::assertSent(SendOtpMail::class, fn (SendOtpMail $mail) => $mail->hasTo($user->email));
     $this->assertGuest();
+});
+
+test('users without two factor enabled are logged in directly', function () {
+    $user = User::factory()->create(['role' => 'winga', 'two_factor_enabled' => false]);
+
+    Livewire::test(Login::class)
+        ->set('email', $user->email)
+        ->set('password', 'password')
+        ->call('login')
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($user);
+});
+
+test('a pending login can be completed with a valid otp', function () {
+    $user = User::factory()->create([
+        'role' => 'winga',
+        'two_factor_enabled' => true,
+        'onboarding_completed' => true,
+    ]);
+
+    $code = $user->generateOtp();
+
+    $this->withSession(['pending_user_id' => $user->id]);
+
+    Livewire::test(VerifyOtp::class)
+        ->set('otp', $code)
+        ->call('verify')
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($user);
 });
 
 test('users can logout', function () {

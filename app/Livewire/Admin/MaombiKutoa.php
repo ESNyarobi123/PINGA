@@ -4,10 +4,13 @@ namespace App\Livewire\Admin;
 
 use App\Models\AdminAuditLog;
 use App\Models\Payment;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
 use App\Services\SnippePayoutService;
+use App\Services\WithdrawalService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -156,33 +159,14 @@ class MaombiKutoa extends Component
     public function retryWithdrawal(int $id): void
     {
         $req = WithdrawalRequest::with('user')->findOrFail($id);
-        $snippe = app(SnippePayoutService::class);
 
-        $result = $snippe->sendPayout([
-            'amount' => (int) $req->amount,
-            'phone' => $req->account_number,
-            'name' => $req->user?->name ?? 'Mfanyakazi',
-            'network' => $req->network ?? $snippe->detectNetwork($req->account_number ?? ''),
-            'narration' => 'Retry: Kutoa pesa - Winga Platform',
-            'idempotency_key' => 'admin-retry-'.$id.'-'.now()->timestamp,
-            'metadata' => [
-                'type' => 'withdrawal',
-                'user_id' => $req->user_id,
-                'withdrawal_id' => $req->id,
-            ],
-        ]);
+        $result = app(WithdrawalService::class)->retry($req);
 
         if ($result['success']) {
-            $req->update([
-                'payout_reference' => $result['reference'],
-                'payout_status' => 'processing',
-                'status' => 'pending',
-                'retry_count' => ($req->retry_count ?? 0) + 1,
-                'last_retry_at' => now(),
-            ]);
+            $req->refresh();
 
             $this->logAdminAction('retry_withdrawal', $req, [
-                'reference' => $result['reference'],
+                'reference' => $result['reference'] ?? null,
                 'retry_count' => $req->retry_count,
             ]);
 
@@ -196,6 +180,13 @@ class MaombiKutoa extends Component
     public function retryJobPayout(int $paymentId): void
     {
         $payment = Payment::with(['worker', 'job'])->findOrFail($paymentId);
+
+        if ($payment->payout_status === 'completed' || $payment->status === 'refunded') {
+            $this->dispatch('toast', message: 'Malipo haya hayahitaji retry.', type: 'warning');
+
+            return;
+        }
+
         $snippe = app(SnippePayoutService::class);
 
         $result = $snippe->sendPayout([
@@ -265,47 +256,87 @@ class MaombiKutoa extends Component
     {
         $req = WithdrawalRequest::with('user')->findOrFail($id);
 
-        if ($req->status === 'rejected') {
+        if (in_array($req->status, ['rejected', 'refunded'], true)) {
             $this->closeRejectModal();
             $this->dispatch('toast', message: 'This request has already been rejected', type: 'warning');
 
             return;
         }
 
+        if ($req->status === 'paid' || $req->payout_status === 'completed') {
+            $this->closeRejectModal();
+            $this->dispatch('toast', message: 'Haiwezi kukataliwa — malipo yameshatumwa kwa mtumiaji.', type: 'error');
+
+            return;
+        }
+
         // Return funds to user wallet (including fee if employer/mteja was charged fee)
         $refundAmount = (float) $req->amount + (float) ($req->charge_amount ?? 0);
-        $req->user->increment('wallet_balance', $refundAmount);
 
-        // Mark corresponding withdrawal debit transaction as failed so it does not count in totalWithdrawn
-        \App\Models\Transaction::where('user_id', $req->user_id)
-            ->where(function ($q) use ($req) {
-                $q->where('reference', 'WD-'.$req->id)
-                    ->orWhere(function ($sub) use ($req) {
-                        $sub->where('type', 'withdrawal')
-                            ->where('status', 'processing')
-                            ->where('amount', $req->amount);
-                    });
-            })
-            ->update(['status' => 'failed']);
+        $refunded = DB::transaction(function () use ($req, $reason, $refundAmount): bool {
+            $locked = WithdrawalRequest::query()->lockForUpdate()->find($req->id);
 
-        // Create refund transaction record for audit trail
-        \App\Models\Transaction::create([
-            'user_id' => $req->user_id,
-            'type' => 'credit',
-            'amount' => $refundAmount,
-            'description' => 'Refund: Ombi la kutoa pesa limekataliwa'.($reason ? ' - Sababu: '.$reason : ''),
-            'balance_after' => $req->user->fresh()->wallet_balance,
-            'reference' => 'admin-reject-'.$req->id.'-'.now()->timestamp,
-            'status' => 'completed',
-        ]);
+            if (! $locked || in_array($locked->status, ['rejected', 'refunded'], true)
+                || $locked->status === 'paid' || $locked->payout_status === 'completed') {
+                return false;
+            }
 
-        $req->update([
-            'status' => 'rejected',
-            'payout_status' => 'failed',
-            'admin_note' => $reason ?: 'Request rejected by admin',
-            'processed_at' => now(),
-            'processed_by' => auth()->id(),
-        ]);
+            $user = $locked->user;
+
+            if (! $user) {
+                return false;
+            }
+
+            $alreadyRefunded = Transaction::query()
+                ->where('user_id', $user->id)
+                ->where('type', 'credit')
+                ->where('reference', 'like', 'admin-reject-'.$locked->id.'-%')
+                ->exists();
+
+            if (! $alreadyRefunded) {
+                $user->increment('wallet_balance', $refundAmount);
+
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'type' => 'credit',
+                    'amount' => $refundAmount,
+                    'description' => 'Refund: Ombi la kutoa pesa limekataliwa'.($reason ? ' - Sababu: '.$reason : ''),
+                    'balance_after' => $user->fresh()->wallet_balance,
+                    'reference' => 'admin-reject-'.$locked->id.'-'.now()->timestamp,
+                    'status' => 'completed',
+                ]);
+            }
+
+            // Mark corresponding withdrawal debit transaction as failed so it does not count in totalWithdrawn
+            Transaction::query()
+                ->where('user_id', $user->id)
+                ->where(function ($q) use ($locked): void {
+                    $q->where('reference', 'WD-'.$locked->id)
+                        ->orWhere(function ($sub) use ($locked): void {
+                            $sub->where('type', 'withdrawal')
+                                ->where('status', 'processing')
+                                ->where('amount', $locked->amount);
+                        });
+                })
+                ->update(['status' => 'failed']);
+
+            $locked->update([
+                'status' => 'rejected',
+                'payout_status' => 'failed',
+                'admin_note' => $reason ?: 'Request rejected by admin',
+                'processed_at' => now(),
+                'processed_by' => auth()->id(),
+            ]);
+
+            return true;
+        });
+
+        if (! $refunded) {
+            $this->closeRejectModal();
+            $this->dispatch('toast', message: 'Ombi hili limeshashughulikiwa.', type: 'warning');
+
+            return;
+        }
 
         // Route appropriately based on user role
         $isClient = in_array(strtolower($req->user?->role ?? ''), ['client', 'mteja']);
@@ -346,12 +377,26 @@ class MaombiKutoa extends Component
     {
         $req = WithdrawalRequest::findOrFail($id);
 
-        $req->update([
-            'status' => 'paid',
-            'payout_status' => 'completed',
-            'processed_at' => now(),
-            'processed_by' => auth()->id(),
-        ]);
+        if (in_array($req->status, ['rejected', 'refunded'], true)) {
+            $this->dispatch('toast', message: 'Ombi lilikataliwa — haliwezi kuwekwa kama limekamilika.', type: 'error');
+
+            return;
+        }
+
+        DB::transaction(function () use ($req): void {
+            $req->update([
+                'status' => 'paid',
+                'payout_status' => 'completed',
+                'processed_at' => now(),
+                'processed_by' => auth()->id(),
+            ]);
+
+            Transaction::query()
+                ->where('reference', 'WD-'.$req->id)
+                ->where('type', 'withdrawal')
+                ->where('status', 'processing')
+                ->update(['status' => 'completed']);
+        });
 
         $this->logAdminAction('complete_withdrawal', $req, [
             'amount' => $req->amount,

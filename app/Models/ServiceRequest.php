@@ -55,6 +55,18 @@ class ServiceRequest extends Model
         return $this->hasOne(Payment::class, 'service_request_id');
     }
 
+    /**
+     * The payment currently holding escrow for this request, if any.
+     */
+    public function escrowedPayment(): ?Payment
+    {
+        return Payment::query()
+            ->where('service_request_id', $this->id)
+            ->where('status', 'escrowed')
+            ->latest('id')
+            ->first();
+    }
+
     public function conversation(): HasOne
     {
         return $this->hasOne(Conversation::class, 'service_request_id');

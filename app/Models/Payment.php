@@ -126,6 +126,129 @@ class Payment extends Model
         return '';
     }
 
+    /**
+     * Release an escrowed payment straight into the worker's wallet.
+     * Idempotent: re-running it never credits the worker twice.
+     *
+     * @return float|null The amount credited, or null when nothing was released.
+     */
+    public function releaseToWorkerWallet(): ?float
+    {
+        return \Illuminate\Support\Facades\DB::transaction(function (): ?float {
+            /** @var self|null $locked */
+            $locked = static::query()->lockForUpdate()->find($this->id);
+
+            if (! $locked || $locked->status !== 'escrowed') {
+                return null;
+            }
+
+            $fees = static::calculateFromWorkerBid((float) $locked->amount);
+            $workerAmount = (float) $fees['worker_amount'];
+
+            $worker = User::query()->lockForUpdate()->find($locked->worker_id);
+
+            if (! $worker) {
+                return null;
+            }
+
+            $locked->update([
+                'platform_fee' => $fees['platform_fee'],
+                'worker_amount' => $workerAmount,
+                'status' => 'released',
+                'payout_status' => 'completed',
+                'escrow_released_at' => now(),
+            ]);
+
+            $alreadyCredited = Transaction::query()
+                ->where('payment_id', $locked->id)
+                ->where('type', 'credit')
+                ->exists();
+
+            if (! $alreadyCredited) {
+                $worker->increment('wallet_balance', $workerAmount);
+
+                Transaction::create([
+                    'user_id' => $worker->id,
+                    'payment_id' => $locked->id,
+                    'type' => 'credit',
+                    'amount' => $workerAmount,
+                    'description' => 'Malipo ya '.($locked->job_id ? 'kazi: ' : 'huduma: ').$locked->escrowItemLabel(),
+                    'balance_after' => $worker->fresh()->wallet_balance,
+                    'status' => 'completed',
+                ]);
+            }
+
+            return $workerAmount;
+        });
+    }
+
+    /**
+     * Return the escrowed amount to the client/employer wallet.
+     * Idempotent: re-running it never refunds the client twice.
+     *
+     * @return float|null The amount refunded, or null when the payment was not escrowed.
+     */
+    public function refundToClientWallet(): ?float
+    {
+        return \Illuminate\Support\Facades\DB::transaction(function (): ?float {
+            /** @var self|null $locked */
+            $locked = static::query()->lockForUpdate()->find($this->id);
+
+            if (! $locked || $locked->status !== 'escrowed') {
+                return null;
+            }
+
+            $amount = (float) $locked->amount;
+
+            $debit = Transaction::query()
+                ->where('payment_id', $locked->id)
+                ->where('type', 'debit')
+                ->first();
+
+            if ($debit) {
+                $amount = (float) $debit->amount;
+            }
+
+            $alreadyCredited = Transaction::query()
+                ->where('payment_id', $locked->id)
+                ->where('type', 'credit')
+                ->where('user_id', $locked->employer_id)
+                ->exists();
+
+            if (! $alreadyCredited && $amount > 0) {
+                $employer = User::query()->lockForUpdate()->find($locked->employer_id);
+
+                if ($employer) {
+                    $employer->increment('wallet_balance', $amount);
+
+                    Transaction::create([
+                        'user_id' => $employer->id,
+                        'payment_id' => $locked->id,
+                        'type' => 'credit',
+                        'amount' => $amount,
+                        'description' => 'Rudisho la escrow: '.$locked->escrowItemLabel(),
+                        'balance_after' => $employer->fresh()->wallet_balance,
+                        'status' => 'completed',
+                    ]);
+                }
+            }
+
+            $locked->update([
+                'status' => 'refunded',
+            ]);
+
+            if ($locked->job && $locked->job->status === 'in_progress') {
+                $locked->job->update(['status' => 'open']);
+            }
+
+            if ($locked->serviceRequest && $locked->serviceRequest->status === 'in_progress') {
+                $locked->serviceRequest->update(['status' => 'accepted']);
+            }
+
+            return $amount;
+        });
+    }
+
     // Relationships
     public function job()
     {

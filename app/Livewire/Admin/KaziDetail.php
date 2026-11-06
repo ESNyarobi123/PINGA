@@ -5,8 +5,11 @@ namespace App\Livewire\Admin;
 use App\Models\Application;
 use App\Models\Job;
 use App\Models\Payment;
+use App\Models\Transaction;
+use App\Models\User;
 use App\Services\OpenStreetMapGeocodingService;
 use App\Services\SettingsService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class KaziDetail extends Component
@@ -178,99 +181,72 @@ class KaziDetail extends Component
             return;
         }
 
-        // Get escrow payment
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
+        $workerAmount = $escrowPayment?->releaseToWorkerWallet();
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
-            // Use stored worker_amount — fee was already added on top at booking time
-            $workerAmount = $escrowPayment->worker_amount;
+        if ($workerAmount === null) {
+            $this->dispatch('toast', message: 'Hakuna malipo ya escrow yanayoweza kutolewa', type: 'error');
 
-            // Credit worker's wallet
-            $worker = $this->job->hiredWorker;
-            if ($worker) {
-                $worker->increment('wallet_balance', $workerAmount);
-                \App\Models\Transaction::create([
-                    'user_id' => $worker->id,
-                    'payment_id' => $escrowPayment->id,
-                    'type' => 'credit',
-                    'amount' => $workerAmount,
-                    'description' => "Malipo ya kazi: {$this->job->title}",
-                    'balance_after' => $worker->fresh()->wallet_balance,
-                    'status' => 'completed',
-                ]);
-            }
-
-            // Mark escrow as released
-            $escrowPayment->update([
-                'status' => 'released',
-                'payout_status' => 'completed',
-                'escrow_released_at' => now(),
-            ]);
-
-            $this->logAdminAction('release_payment', $this->job, [
-                'amount' => $workerAmount,
-            ]);
-
-            $this->dispatch('toast', message: 'Malipo yametolewa', type: 'success');
-            $this->dispatch('refreshJobDetail');
+            return;
         }
+
+        $this->logAdminAction('release_payment', $this->job, [
+            'amount' => $workerAmount,
+        ]);
+
+        $this->dispatch('toast', message: 'Malipo yametolewa', type: 'success');
+        $this->dispatch('refreshJobDetail');
     }
 
     public function refundPayment(): void
     {
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
+        $refundAmount = $escrowPayment?->refundToClientWallet();
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
-            // Refund full amount (workerBid + platformFee) back to employer
-            $refundAmount = $escrowPayment->amount;
-            $employer = $this->job->employer;
+        if ($refundAmount === null) {
+            $this->dispatch('toast', message: 'Hakuna malipo ya escrow yanayoweza kurudishwa', type: 'error');
 
-            if ($employer) {
-                $employer->increment('wallet_balance', $refundAmount);
-                \App\Models\Transaction::create([
-                    'user_id' => $employer->id,
-                    'payment_id' => $escrowPayment->id,
-                    'type' => 'credit',
-                    'amount' => $refundAmount,
-                    'description' => "Rudisha malipo ya kazi: {$this->job->title}",
-                    'balance_after' => $employer->fresh()->wallet_balance,
-                    'status' => 'completed',
-                ]);
-            }
-
-            // Mark escrow as refunded
-            $escrowPayment->update([
-                'status' => 'refunded',
-                'payout_status' => 'completed',
-            ]);
-
-            $this->logAdminAction('refund_payment', $this->job, [
-                'amount' => $refundAmount,
-            ]);
-
-            $this->dispatch('toast', message: 'Pesa imerudishwa kwa mteja', type: 'success');
-            $this->dispatch('refreshJobDetail');
+            return;
         }
+
+        $this->logAdminAction('refund_payment', $this->job, [
+            'amount' => $refundAmount,
+        ]);
+
+        $this->dispatch('toast', message: 'Pesa imerudishwa kwa mteja', type: 'success');
+        $this->dispatch('refreshJobDetail');
     }
 
     public function splitPayment(): void
     {
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
+        if (! $escrowPayment) {
+            $this->dispatch('toast', message: 'Hakuna malipo ya escrow yanayoweza kugawanywa', type: 'error');
+
+            return;
+        }
+
+        $split = DB::transaction(function () use ($escrowPayment): ?array {
+            $locked = Payment::query()->lockForUpdate()->find($escrowPayment->id);
+
+            if (! $locked || $locked->status !== 'escrowed') {
+                return null;
+            }
+
             // Split the worker_amount (the fee has already been accounted for)
-            $totalForSplit = $escrowPayment->worker_amount;
+            $totalForSplit = (float) $locked->worker_amount;
+            $workerAmount = round($totalForSplit * ($this->workerPercentage / 100), 2);
+            $clientAmount = round($totalForSplit * ($this->clientPercentage / 100), 2);
 
-            $workerAmount = $totalForSplit * ($this->workerPercentage / 100);
-            $clientAmount = $totalForSplit * ($this->clientPercentage / 100);
+            $worker = User::query()->lockForUpdate()->find($locked->worker_id);
+            $employer = User::query()->lockForUpdate()->find($locked->employer_id);
 
-            // Credit worker's portion
-            $worker = $this->job->hiredWorker;
-            if ($worker) {
+            if ($worker && $workerAmount > 0) {
                 $worker->increment('wallet_balance', $workerAmount);
-                \App\Models\Transaction::create([
+                Transaction::create([
                     'user_id' => $worker->id,
-                    'payment_id' => $escrowPayment->id,
+                    'payment_id' => $locked->id,
                     'type' => 'credit',
                     'amount' => $workerAmount,
                     'description' => "Sehemu ya malipo ({$this->workerPercentage}%): {$this->job->title}",
@@ -279,13 +255,11 @@ class KaziDetail extends Component
                 ]);
             }
 
-            // Refund employer's portion
-            $employer = $this->job->employer;
             if ($employer && $clientAmount > 0) {
                 $employer->increment('wallet_balance', $clientAmount);
-                \App\Models\Transaction::create([
+                Transaction::create([
                     'user_id' => $employer->id,
-                    'payment_id' => $escrowPayment->id,
+                    'payment_id' => $locked->id,
                     'type' => 'credit',
                     'amount' => $clientAmount,
                     'description' => "Rudisha sehemu ({$this->clientPercentage}%): {$this->job->title}",
@@ -294,24 +268,31 @@ class KaziDetail extends Component
                 ]);
             }
 
-            // Mark escrow as released
-            $escrowPayment->update([
+            $locked->update([
                 'status' => 'released',
                 'payout_status' => 'completed',
                 'escrow_released_at' => now(),
             ]);
 
-            $this->logAdminAction('split_payment', $this->job, [
-                'worker_percentage' => $this->workerPercentage,
-                'client_percentage' => $this->clientPercentage,
-                'worker_amount' => $workerAmount,
-                'client_amount' => $clientAmount,
-            ]);
+            return ['worker' => $workerAmount, 'client' => $clientAmount];
+        });
 
-            $this->showSplitModal = false;
-            $this->dispatch('toast', message: 'Malipo yamegawanywa', type: 'success');
-            $this->dispatch('refreshJobDetail');
+        if ($split === null) {
+            $this->dispatch('toast', message: 'Hakuna malipo ya escrow yanayoweza kugawanywa', type: 'error');
+
+            return;
         }
+
+        $this->logAdminAction('split_payment', $this->job, [
+            'worker_percentage' => $this->workerPercentage,
+            'client_percentage' => $this->clientPercentage,
+            'worker_amount' => $split['worker'],
+            'client_amount' => $split['client'],
+        ]);
+
+        $this->showSplitModal = false;
+        $this->dispatch('toast', message: 'Malipo yamegawanywa', type: 'success');
+        $this->dispatch('refreshJobDetail');
     }
 
     public function resetCompletionCode(): void
@@ -334,29 +315,23 @@ class KaziDetail extends Component
 
     public function getEscrowAmount(): float
     {
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
 
-        return ($escrowPayment && $escrowPayment->status === 'escrowed') ? $escrowPayment->amount : 0;
+        return $escrowPayment ? (float) $escrowPayment->amount : 0.0;
     }
 
     public function getPlatformFee(): float
     {
-        $payment = $this->job->payment;
-        if ($payment && $payment->status === 'escrowed') {
-            return (float) $payment->platform_fee;
-        }
+        $payment = $this->job->escrowedPayment();
 
-        return 0.0;
+        return $payment ? (float) $payment->platform_fee : 0.0;
     }
 
     public function getWorkerAmount(): float
     {
-        $payment = $this->job->payment;
-        if ($payment && $payment->status === 'escrowed') {
-            return (float) $payment->worker_amount;
-        }
+        $payment = $this->job->escrowedPayment();
 
-        return 0.0;
+        return $payment ? (float) $payment->worker_amount : 0.0;
     }
 
     public function getTimeline(): array
@@ -410,13 +385,15 @@ class KaziDetail extends Component
         }
 
         // Payments
-        if ($this->job->payment) {
+        $paymentForTimeline = $this->job->escrowedPayment() ?? $this->job->payment;
+
+        if ($paymentForTimeline) {
             $events[] = [
                 'type' => 'payment',
                 'icon' => '💰',
                 'title' => 'Malipo',
-                'description' => 'Escrow: TZS '.number_format($this->job->payment->amount),
-                'time' => $this->job->payment->created_at->format('d M Y, H:i'),
+                'description' => 'Escrow: TZS '.number_format((float) $paymentForTimeline->amount),
+                'time' => $paymentForTimeline->created_at->format('d M Y, H:i'),
                 'color' => 'amber',
             ];
         }

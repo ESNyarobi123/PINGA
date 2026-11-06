@@ -241,18 +241,9 @@ class Wallet extends Component
             return;
         }
 
-        // Check for active jobs in escrow
-        $hasActiveEscrow = \App\Models\Payment::where('employer_id', $user->id)
-            ->where('status', 'escrowed')
-            ->exists();
-
-        $availableBalance = $user->wallet_balance;
-        if ($hasActiveEscrow) {
-            $escrowedTotal = \App\Models\Payment::where('employer_id', $user->id)
-                ->where('status', 'escrowed')
-                ->sum('amount');
-            $availableBalance = $user->wallet_balance - $escrowedTotal;
-        }
+        // Escrow funds are already debited from the wallet when a job/service is paid for,
+        // so the wallet balance is the amount actually available to withdraw.
+        $availableBalance = (float) $user->wallet_balance;
 
         if ($availableBalance < $totalDeduction) {
             $this->addError('withdrawAmount', 'Salio lako linaloweza kutolewa ni TZS '.number_format($availableBalance).' (baada ya kuzingatia malipo yaliyoshikiliwa).');

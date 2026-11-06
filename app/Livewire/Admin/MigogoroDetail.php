@@ -2,29 +2,38 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\AdminAuditLog;
 use App\Models\Dispute;
+use App\Models\DisputeEvidence;
 use App\Models\Job;
 use App\Models\Payment;
-use App\Models\DisputeEvidence;
-use App\Models\AdminAuditLog;
-use App\Services\SettingsService;
+use App\Models\Transaction;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class MigogoroDetail extends Component
 {
     public Dispute $dispute;
+
     public Job $job;
 
     // Resolution actions
     public string $resolutionType = '';
+
     public string $resolutionReason = '';
+
     public string $adminNotes = '';
+
     public string $penaltyType = '';
+
     public string $penaltyReason = '';
+
     public int $penaltyAmount = 0;
 
     // Evidence
     public array $evidenceFiles = [];
+
     public string $evidenceDescription = '';
 
     // Chat messages
@@ -47,21 +56,21 @@ class MigogoroDetail extends Component
                 'sender_type' => 'client',
                 'message' => 'Nimekupa kazi lakini umefanya vibaya sana',
                 'timestamp' => $this->dispute->created_at->subMinutes(30)->format('d M Y, H:i'),
-                'avatar' => $this->job->employer->avatar
+                'avatar' => $this->job->employer->avatar,
             ],
             [
                 'sender' => $this->job->hiredWorker?->name ?? 'Unknown',
                 'sender_type' => 'worker',
                 'message' => 'Nimefanya kazi kwa bidii, unanidanganya wapi?',
                 'timestamp' => $this->dispute->created_at->subMinutes(25)->format('d M Y, H:i'),
-                'avatar' => $this->job->hiredWorker?->avatar
+                'avatar' => $this->job->hiredWorker?->avatar,
             ],
             [
                 'sender' => $this->job->employer->name,
                 'sender_type' => 'client',
                 'message' => 'Hujakamilisha kazi, nataka pesa zangu rudishiwe',
                 'timestamp' => $this->dispute->created_at->subMinutes(20)->format('d M Y, H:i'),
-                'avatar' => $this->job->employer->avatar
+                'avatar' => $this->job->employer->avatar,
             ],
         ];
     }
@@ -75,7 +84,7 @@ class MigogoroDetail extends Component
                 'images' => $evidence->images,
                 'content' => $evidence->content,
                 'submitted_by' => $evidence->submitted_by,
-                'created_at' => $evidence->created_at->format('d M Y, H:i')
+                'created_at' => $evidence->created_at->format('d M Y, H:i'),
             ];
         })->toArray();
     }
@@ -84,7 +93,7 @@ class MigogoroDetail extends Component
     {
         $escrowPayment = $this->job->payment;
 
-        if (!$escrowPayment || $escrowPayment->status !== 'escrowed') {
+        if (! $escrowPayment || $escrowPayment->status !== 'escrowed') {
             return 0;
         }
 
@@ -98,7 +107,7 @@ class MigogoroDetail extends Component
 
     public function getPriorityColor(): string
     {
-        return match($this->dispute->priority) {
+        return match ($this->dispute->priority) {
             'high' => 'red',
             'medium' => 'amber',
             'low' => 'green',
@@ -108,7 +117,7 @@ class MigogoroDetail extends Component
 
     public function getStatusColor(): string
     {
-        return match($this->dispute->status) {
+        return match ($this->dispute->status) {
             'open' => 'red',
             'investigating' => 'amber',
             'resolved' => 'green',
@@ -121,31 +130,29 @@ class MigogoroDetail extends Component
     {
         if ($this->dispute->status !== 'open') {
             $this->dispatch('toast', message: 'Dispute is not in open status', type: 'error');
+
             return;
         }
 
-        $escrowAmount = $this->getEscrowAmount();
-        
-        // Release escrow to worker
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
-            $platformFee = $escrowAmount * (SettingsService::commissionRate() / 100);
-            $workerAmount = $escrowAmount - $platformFee;
+        $workerAmount = $escrowPayment?->releaseToWorkerWallet();
 
-            // Release escrow to worker
-            $escrowPayment->releaseToWorker();
+        if ($workerAmount === null) {
+            $this->dispatch('toast', message: 'Hakuna escrow inayoweza kutolewa', type: 'error');
+
+            return;
         }
 
         // Update dispute status
         $this->dispute->update([
             'status' => 'resolved',
-            'admin_notes' => ($this->resolutionReason ?: 'Worker favored in dispute resolution') . "\n" . $this->adminNotes,
+            'admin_notes' => ($this->resolutionReason ?: 'Worker favored in dispute resolution')."\n".$this->adminNotes,
         ]);
 
         $this->logAdminAction('resolve_dispute_worker_favor', $this->dispute, [
             'resolution_type' => 'worker_favor',
-            'amount' => $workerAmount ?? 0,
+            'amount' => $workerAmount,
         ]);
 
         $this->dispatch('toast', message: 'Escrow released to worker', type: 'success');
@@ -156,31 +163,29 @@ class MigogoroDetail extends Component
     {
         if ($this->dispute->status !== 'open') {
             $this->dispatch('toast', message: 'Dispute is not in open status', type: 'error');
+
             return;
         }
 
-        $escrowAmount = $this->getEscrowAmount();
-        
-        // Refund to client
-        $escrowPayment = $this->job->payment;
+        $escrowPayment = $this->job->escrowedPayment();
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
-            // Refund amount to employer wallet
-            $this->job->employer->increment('wallet_balance', $escrowAmount);
+        $refunded = $escrowPayment?->refundToClientWallet();
 
-            // Mark escrow as refunded
-            $escrowPayment->update(['status' => 'refunded']);
+        if ($refunded === null) {
+            $this->dispatch('toast', message: 'Hakuna escrow inayoweza kurudishwa', type: 'error');
+
+            return;
         }
 
         // Update dispute status
         $this->dispute->update([
             'status' => 'resolved',
-            'admin_notes' => ($this->resolutionReason ?: 'Client favored in dispute resolution') . "\n" . $this->adminNotes,
+            'admin_notes' => ($this->resolutionReason ?: 'Client favored in dispute resolution')."\n".$this->adminNotes,
         ]);
 
         $this->logAdminAction('resolve_dispute_client_favor', $this->dispute, [
             'resolution_type' => 'client_favor',
-            'amount' => $escrowAmount,
+            'amount' => $refunded,
         ]);
 
         $this->dispatch('toast', message: 'Escrow refunded to client', type: 'success');
@@ -191,42 +196,87 @@ class MigogoroDetail extends Component
     {
         if ($this->dispute->status !== 'open') {
             $this->dispatch('toast', message: 'Dispute is not in open status', type: 'error');
+
             return;
         }
 
-        $escrowAmount = $this->getEscrowAmount();
-        $platformFee = $escrowAmount * (SettingsService::commissionRate() / 100);
-        $remainingAmount = $escrowAmount - $platformFee;
-        
-        // Default 50/50 split
-        $clientAmount = $remainingAmount / 2;
-        $workerAmount = $remainingAmount / 2;
+        $escrowPayment = $this->job->escrowedPayment();
 
-        $escrowPayment = $this->job->payment;
+        if (! $escrowPayment) {
+            $this->dispatch('toast', message: 'Hakuna escrow inayoweza kugawanywa', type: 'error');
 
-        if ($escrowPayment && $escrowPayment->status === 'escrowed') {
-            // Refund half to employer wallet
-            $this->job->employer->increment('wallet_balance', $clientAmount);
+            return;
+        }
 
-            // Credit worker wallet with their half
-            if ($this->job->hiredWorker) {
-                $this->job->hiredWorker->increment('wallet_balance', $workerAmount);
+        $split = DB::transaction(function () use ($escrowPayment): ?array {
+            $locked = Payment::query()->lockForUpdate()->find($escrowPayment->id);
+
+            if (! $locked || $locked->status !== 'escrowed') {
+                return null;
             }
 
-            // Mark escrow as released
-            $escrowPayment->update(['status' => 'released']);
+            $fees = Payment::calculateFromWorkerBid((float) $locked->amount);
+            $clientAmount = round((float) $fees['worker_amount'] / 2, 2);
+            $workerAmount = (float) $fees['worker_amount'] - $clientAmount;
+
+            $employer = User::query()->lockForUpdate()->find($locked->employer_id);
+            $worker = User::query()->lockForUpdate()->find($locked->worker_id);
+
+            if ($employer && $clientAmount > 0) {
+                $employer->increment('wallet_balance', $clientAmount);
+
+                Transaction::create([
+                    'user_id' => $employer->id,
+                    'payment_id' => $locked->id,
+                    'type' => 'credit',
+                    'amount' => $clientAmount,
+                    'description' => 'Mgawanyo wa escrow (mgogoro): '.$locked->escrowItemLabel(),
+                    'balance_after' => $employer->fresh()->wallet_balance,
+                    'status' => 'completed',
+                ]);
+            }
+
+            if ($worker && $workerAmount > 0) {
+                $worker->increment('wallet_balance', $workerAmount);
+
+                Transaction::create([
+                    'user_id' => $worker->id,
+                    'payment_id' => $locked->id,
+                    'type' => 'credit',
+                    'amount' => $workerAmount,
+                    'description' => 'Mgawanyo wa escrow (mgogoro): '.$locked->escrowItemLabel(),
+                    'balance_after' => $worker->fresh()->wallet_balance,
+                    'status' => 'completed',
+                ]);
+            }
+
+            $locked->update([
+                'platform_fee' => $fees['platform_fee'],
+                'worker_amount' => $workerAmount,
+                'status' => 'released',
+                'payout_status' => 'completed',
+                'escrow_released_at' => now(),
+            ]);
+
+            return ['client' => $clientAmount, 'worker' => $workerAmount];
+        });
+
+        if ($split === null) {
+            $this->dispatch('toast', message: 'Hakuna escrow inayoweza kugawanywa', type: 'error');
+
+            return;
         }
 
         // Update dispute status
         $this->dispute->update([
             'status' => 'resolved',
-            'admin_notes' => ($this->resolutionReason ?: '50/50 split in dispute resolution') . "\n" . $this->adminNotes,
+            'admin_notes' => ($this->resolutionReason ?: '50/50 split in dispute resolution')."\n".$this->adminNotes,
         ]);
 
         $this->logAdminAction('resolve_dispute_split', $this->dispute, [
             'resolution_type' => 'split',
-            'client_amount' => $clientAmount,
-            'worker_amount' => $workerAmount,
+            'client_amount' => $split['client'],
+            'worker_amount' => $split['worker'],
         ]);
 
         $this->dispatch('toast', message: 'Escrow split 50/50 between parties', type: 'success');
@@ -235,8 +285,9 @@ class MigogoroDetail extends Component
 
     public function applyPenalty(): void
     {
-        if (!$this->penaltyType || !$this->penaltyReason) {
+        if (! $this->penaltyType || ! $this->penaltyReason) {
             $this->dispatch('toast', message: 'Please select penalty type and reason', type: 'error');
+
             return;
         }
 
@@ -249,7 +300,7 @@ class MigogoroDetail extends Component
         ];
 
         $this->dispute->update([
-            'admin_notes' => ($this->dispute->admin_notes ? $this->dispute->admin_notes . "\n" : '') . 'Penalty: ' . json_encode($penaltyData),
+            'admin_notes' => ($this->dispute->admin_notes ? $this->dispute->admin_notes."\n" : '').'Penalty: '.json_encode($penaltyData),
         ]);
 
         $this->logAdminAction('apply_penalty', $this->dispute, [
@@ -263,8 +314,9 @@ class MigogoroDetail extends Component
 
     public function uploadEvidence(): void
     {
-        if (!$this->evidenceDescription) {
+        if (! $this->evidenceDescription) {
             $this->dispatch('toast', message: 'Please provide evidence description', type: 'error');
+
             return;
         }
 
@@ -304,7 +356,7 @@ class MigogoroDetail extends Component
     {
         $this->dispute->update([
             'status' => 'open',
-            'admin_notes' => ($this->dispute->admin_notes ? $this->dispute->admin_notes . "\n" : '') . 'Reopened by admin at ' . now()->format('d M Y, H:i'),
+            'admin_notes' => ($this->dispute->admin_notes ? $this->dispute->admin_notes."\n" : '').'Reopened by admin at '.now()->format('d M Y, H:i'),
         ]);
 
         $this->logAdminAction('reopen_dispute', $this->dispute, []);

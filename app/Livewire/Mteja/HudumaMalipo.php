@@ -199,9 +199,10 @@ class HudumaMalipo extends Component
 
     private function serviceRequestAlreadyPaid(ServiceRequest $request): bool
     {
-        $status = $request->payment?->status;
-
-        return in_array($status, ['escrowed', 'released'], true);
+        return Payment::query()
+            ->where('service_request_id', $request->id)
+            ->whereIn('status', ['escrowed', 'released'])
+            ->exists();
     }
 
     public function render()

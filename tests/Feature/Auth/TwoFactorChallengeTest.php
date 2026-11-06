@@ -1,32 +1,34 @@
 <?php
 
+use App\Livewire\Auth\VerifyOtp;
 use App\Models\User;
-use Laravel\Fortify\Features;
+use Livewire\Livewire;
 
-test('two factor challenge redirects to login when not authenticated', function () {
-    if (! Features::canManageTwoFactorAuthentication()) {
-        $this->markTestSkipped('Two-factor authentication is not enabled.');
-    }
-
-    $response = $this->get(route('two-factor.login'));
+test('otp verification page redirects to login when there is no pending login', function () {
+    $response = $this->get(route('verify-otp'));
 
     $response->assertRedirect(route('login'));
 });
 
-test('two factor challenge can be rendered', function () {
-    if (! Features::canManageTwoFactorAuthentication()) {
-        $this->markTestSkipped('Two-factor authentication is not enabled.');
-    }
+test('otp verification page can be rendered while a login is pending', function () {
+    $user = User::factory()->create(['two_factor_enabled' => true]);
 
-    Features::twoFactorAuthentication([
-        'confirm' => true,
-        'confirmPassword' => true,
-    ]);
+    $response = $this->withSession(['pending_user_id' => $user->id])
+        ->get(route('verify-otp'));
 
-    $user = User::factory()->withTwoFactor()->create();
+    $response->assertOk();
+});
 
-    $this->post(route('login.store'), [
-        'email' => $user->email,
-        'password' => 'password',
-    ])->assertRedirect(route('two-factor.login'));
+test('an invalid otp keeps the user on the verification screen', function () {
+    $user = User::factory()->create(['two_factor_enabled' => true]);
+    $user->generateOtp();
+
+    $this->withSession(['pending_user_id' => $user->id]);
+
+    Livewire::test(VerifyOtp::class)
+        ->set('otp', '000000')
+        ->call('verify')
+        ->assertSet('errorMessage', 'OTP uliyoingiza si sahihi, imeisha muda wake au majaribio yamezidi.');
+
+    $this->assertGuest();
 });

@@ -125,6 +125,19 @@ class Job extends Model
         return $this->hasOne(Payment::class);
     }
 
+    /**
+     * The payment currently holding escrow for this job, if any.
+     * Prefers the escrowed row so stale/duplicate released rows are ignored.
+     */
+    public function escrowedPayment(): ?Payment
+    {
+        return Payment::query()
+            ->where('job_id', $this->id)
+            ->where('status', 'escrowed')
+            ->latest('id')
+            ->first();
+    }
+
     public function disputes()
     {
         return $this->hasMany(Dispute::class);

@@ -3,6 +3,7 @@
 namespace App\Livewire\Winga;
 
 use App\Models\Transaction;
+use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
 use App\Services\SelcomPayoutService;
@@ -154,6 +155,8 @@ class TombaOmbi extends Component
                     $withdrawal->update(['payout_reference' => $result['reference']]);
                     Log::info("TombaOmbi: Snippe payout sent for withdrawal {$withdrawal->id}", $result);
                 } else {
+                    $withdrawal->update(['payout_status' => 'failed']);
+
                     Log::error("TombaOmbi: All payout providers failed for withdrawal {$withdrawal->id}", $result);
 
                     $user->notify(new WingaNotification(
@@ -164,6 +167,17 @@ class TombaOmbi extends Component
                         action_url: route('winga.tomba-ombi'),
                         action_label: 'Angalia Hali',
                     ));
+
+                    User::where('role', 'admin')->get()->each(function (User $admin) use ($withdrawal, $withdrawalAmount): void {
+                        $admin->notify(new WingaNotification(
+                            title: '🚨 Payout ya withdrawal imeshindwa',
+                            message: 'Withdrawal #'.$withdrawal->id.' ya TZS '.number_format($withdrawalAmount).' imeshindwa. Angalia na ujaribu tena.',
+                            icon: 'x-circle',
+                            color: 'red',
+                            action_url: route('admin.maombi-kutoa'),
+                            action_label: 'Angalia Maombi',
+                        ));
+                    });
                 }
             }
         });

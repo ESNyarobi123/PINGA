@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -23,7 +24,7 @@ class SnippePayoutService
     {
         $this->apiKey = config('services.snippe.key');
         $this->baseUrl = config('services.snippe.url', 'https://api.snippe.sh');
-        $webhookBase = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
+        $webhookBase = config('services.snippe.webhook_base_url', 'https://winga.hisgc.net');
         $this->webhookUrl = $webhookBase.'/api/webhooks/snippe-payout';
     }
 
@@ -232,27 +233,45 @@ class SnippePayoutService
         ?int $workerId,
         float $amount,
     ): void {
-        // Update job payment payout status
-        if ($paymentId) {
-            Payment::where('id', $paymentId)->update(['payout_status' => 'completed']);
+        DB::transaction(function () use ($reference, $paymentId, $withdrawalId): void {
+            // Update job payment payout status
+            if ($paymentId) {
+                Payment::where('id', $paymentId)->update(['payout_status' => 'completed']);
 
-            // Update the pending transaction to completed
-            Transaction::where('reference', $reference)
-                ->orWhere('payment_id', $paymentId)
-                ->where('type', 'credit')
-                ->where('status', 'processing')
-                ->update(['status' => 'completed']);
-        }
+                // Update the pending transaction to completed
+                Transaction::query()
+                    ->where('status', 'processing')
+                    ->where(function ($query) use ($reference, $paymentId): void {
+                        $query->where('reference', $reference)
+                            ->orWhere(function ($sub) use ($paymentId): void {
+                                $sub->where('payment_id', $paymentId)
+                                    ->where('type', 'credit');
+                            });
+                    })
+                    ->update(['status' => 'completed']);
+            }
 
-        // Update withdrawal request
-        if ($withdrawalId) {
-            WithdrawalRequest::where('id', $withdrawalId)->update([
-                'status' => 'paid',
-                'payout_reference' => $reference,
-                'payout_status' => 'completed',
-                'processed_at' => now(),
-            ]);
-        }
+            // Update withdrawal request
+            if ($withdrawalId) {
+                $withdrawal = WithdrawalRequest::query()->lockForUpdate()->find($withdrawalId);
+
+                if ($withdrawal) {
+                    $withdrawal->update([
+                        'status' => 'paid',
+                        'payout_reference' => $reference,
+                        'payout_status' => 'completed',
+                        'processed_at' => now(),
+                    ]);
+                }
+
+                // Close the withdrawal debit row so the history does not stay "processing" forever.
+                Transaction::query()
+                    ->where('reference', 'WD-'.$withdrawalId)
+                    ->where('type', 'withdrawal')
+                    ->where('status', 'processing')
+                    ->update(['status' => 'completed']);
+            }
+        });
 
         // Notify worker
         if ($workerId) {
@@ -288,10 +307,25 @@ class SnippePayoutService
             Payment::where('id', $paymentId)->update(['payout_status' => 'failed']);
         }
 
-        // Refund withdrawal wallet balance
+        $refunded = false;
+        $recipientId = $workerId;
+
+        // Refund withdrawal wallet balance (idempotently)
         if ($withdrawalId) {
-            $withdrawal = WithdrawalRequest::find($withdrawalId);
-            if ($withdrawal && $withdrawal->status !== 'refunded') {
+            $refunded = DB::transaction(function () use ($reference, $withdrawalId, &$recipientId): bool {
+                $withdrawal = WithdrawalRequest::query()->lockForUpdate()->find($withdrawalId);
+
+                if (! $withdrawal) {
+                    return false;
+                }
+
+                $recipientId = $withdrawal->user_id ?: $recipientId;
+
+                // Already cancelled/refunded or already flagged as failed: never refund twice.
+                if (in_array($withdrawal->status, ['rejected', 'refunded'], true) || $withdrawal->payout_status === 'failed') {
+                    return false;
+                }
+
                 $withdrawal->update([
                     'status' => 'rejected',
                     'payout_status' => 'failed',
@@ -300,42 +334,51 @@ class SnippePayoutService
                     'processed_at' => now(),
                 ]);
 
-                // Refund wallet
-                if ($workerId) {
-                    $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
-                    User::where('id', $workerId)->increment('wallet_balance', $refundAmount);
-                    $workerFresh = User::find($workerId);
+                $refundReference = 'refund-'.$reference;
 
-                    Transaction::where('user_id', $workerId)
-                        ->where(function ($q) use ($withdrawal) {
-                            $q->where('reference', 'WD-'.$withdrawal->id)
-                                ->orWhere(function ($sub) use ($withdrawal) {
-                                    $sub->where('type', 'withdrawal')
-                                        ->where('status', 'processing')
-                                        ->where('amount', $withdrawal->amount);
-                                });
-                        })
-                        ->update(['status' => 'failed']);
-
-                    Transaction::create([
-                        'user_id' => $workerId,
-                        'type' => 'credit',
-                        'amount' => $refundAmount,
-                        'description' => 'Refund: kutoa fedha kumeshindwa — '.$reference,
-                        'balance_after' => $workerFresh?->wallet_balance ?? 0,
-                        'status' => 'completed',
-                        'reference' => 'refund-'.$reference,
-                    ]);
+                if (! $recipientId || Transaction::query()->where('reference', $refundReference)->exists()) {
+                    return false;
                 }
-            }
+
+                $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
+
+                User::whereKey($recipientId)->increment('wallet_balance', $refundAmount);
+                $workerFresh = User::find($recipientId);
+
+                Transaction::query()
+                    ->where('user_id', $recipientId)
+                    ->where(function ($q) use ($withdrawal): void {
+                        $q->where('reference', 'WD-'.$withdrawal->id)
+                            ->orWhere(function ($sub) use ($withdrawal): void {
+                                $sub->where('type', 'withdrawal')
+                                    ->where('status', 'processing')
+                                    ->where('amount', $withdrawal->amount);
+                            });
+                    })
+                    ->update(['status' => 'failed']);
+
+                Transaction::create([
+                    'user_id' => $recipientId,
+                    'type' => 'credit',
+                    'amount' => $refundAmount,
+                    'description' => 'Refund: kutoa fedha kumeshindwa — '.$reference,
+                    'balance_after' => $workerFresh?->wallet_balance ?? 0,
+                    'status' => 'completed',
+                    'reference' => $refundReference,
+                ]);
+
+                return true;
+            });
         }
 
         // Notify worker
-        if ($workerId) {
-            $worker = User::find($workerId);
+        if ($recipientId) {
+            $worker = User::find($recipientId);
             $worker?->notify(new WingaNotification(
                 title: '⚠️ Tatizo la Malipo',
-                message: 'Kulikuwa na tatizo na malipo yako ya TZS '.number_format($amount).'. Fedha imerudishwa kwenye wallet yako. Jaribu tena.',
+                message: $refunded
+                    ? 'Kulikuwa na tatizo na malipo yako ya TZS '.number_format($amount).'. Fedha imerudishwa kwenye wallet yako. Jaribu tena.'
+                    : 'Kulikuwa na tatizo na malipo yako ya TZS '.number_format($amount).'. Wasiliana na msaada wa Winga.',
                 icon: 'exclamation-triangle',
                 color: 'red',
                 action_url: route('winga.tomba-ombi'),
@@ -348,7 +391,8 @@ class SnippePayoutService
         foreach ($admins as $admin) {
             $admin->notify(new WingaNotification(
                 title: '🚨 Payout Imeshindwa',
-                message: "Payout {$reference} ya TZS ".number_format($amount).' imeshindwa. Angalia na ujaribu tena.',
+                message: "Payout {$reference} ya TZS ".number_format($amount).' imeshindwa. '
+                    .($refunded ? 'Fedha zimerudishwa kwenye wallet ya mtumiaji.' : 'Hakuna refund iliyofanyika.'),
                 icon: 'x-circle',
                 color: 'red',
                 action_url: route('admin.maombi-kutoa'),
@@ -356,9 +400,11 @@ class SnippePayoutService
             ));
         }
 
-        // Schedule auto-retry after 1 hour
-        RetryFailedPayout::dispatch($reference, $type, $paymentId, $withdrawalId, $workerId, $amount)
-            ->delay(now()->addHour());
+        // Never auto-retry a withdrawal that was already refunded — that would pay twice.
+        if (! $refunded) {
+            RetryFailedPayout::dispatch($reference, $type, $paymentId, $withdrawalId, $workerId, $amount)
+                ->delay(now()->addHour());
+        }
 
         Log::error("Snippe Payout Failed: {$reference} — TZS {$amount}");
     }

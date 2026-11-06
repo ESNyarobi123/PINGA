@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
 use App\Services\SettingsService;
+use App\Services\WithdrawalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Component;
@@ -374,55 +375,16 @@ class Malipo extends Component
             return;
         }
 
-        $fees = Payment::calculateFromWorkerBid((float) $payment->amount);
-        $released = DB::transaction(function () use ($payment, $fees) {
-            $locked = Payment::query()->lockForUpdate()->find($payment->id);
+        $released = $payment->releaseToWorkerWallet();
 
-            if (! $locked || $locked->status !== 'escrowed') {
-                return false;
-            }
-
-            $locked->update([
-                'platform_fee' => $fees['platform_fee'],
-                'worker_amount' => $fees['worker_amount'],
-                'status' => 'released',
-                'payout_status' => 'completed',
-                'escrow_released_at' => now(),
-            ]);
-
-            $worker = $locked->worker;
-            $label = ($locked->job_id ? 'Malipo ya kazi: ' : 'Malipo ya huduma: ').$locked->escrowItemLabel();
-
-            $alreadyCredited = $worker && Transaction::query()
-                ->where('payment_id', $locked->id)
-                ->where('type', 'credit')
-                ->exists();
-
-            if ($worker && ! $alreadyCredited) {
-                $worker->increment('wallet_balance', (float) $fees['worker_amount']);
-
-                Transaction::create([
-                    'user_id' => $worker->id,
-                    'payment_id' => $locked->id,
-                    'type' => 'credit',
-                    'amount' => (float) $fees['worker_amount'],
-                    'description' => $label,
-                    'balance_after' => $worker->fresh()->wallet_balance,
-                    'status' => 'completed',
-                ]);
-            }
-
-            return true;
-        });
-
-        if (! $released) {
+        if ($released === null) {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
 
             return;
         }
 
         $this->logAdminAction('release_escrow', $payment, [
-            'amount' => $fees['worker_amount'],
+            'amount' => $released,
         ]);
 
         $this->dispatch('toast', message: 'Escrow released successfully', type: 'success');
@@ -438,30 +400,7 @@ class Malipo extends Component
             return;
         }
 
-        $refunded = DB::transaction(function () use ($payment) {
-            $locked = Payment::query()->lockForUpdate()->find($payment->id);
-
-            if (! $locked || $locked->status !== 'escrowed') {
-                return null;
-            }
-
-            $amount = $this->creditEscrowRefund($locked);
-
-            $locked->update([
-                'status' => 'refunded',
-                'payout_status' => 'refunded',
-            ]);
-
-            if ($locked->job && $locked->job->status === 'in_progress') {
-                $locked->job->update(['status' => 'open']);
-            }
-
-            if ($locked->serviceRequest && $locked->serviceRequest->status === 'in_progress') {
-                $locked->serviceRequest->update(['status' => 'accepted']);
-            }
-
-            return $amount;
-        });
+        $refunded = $payment->refundToClientWallet();
 
         if ($refunded === null) {
             $this->dispatch('toast', message: 'Invalid escrow payment', type: 'error');
@@ -532,58 +471,100 @@ class Malipo extends Component
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
 
-        $withdrawal->update(['status' => 'pending']);
+        $result = app(WithdrawalService::class)->retry($withdrawal);
 
-        $this->logAdminAction('retry_withdrawal', $withdrawal, [
-            'amount' => $withdrawal->amount,
-        ]);
+        if ($result['success']) {
+            $withdrawal->refresh();
 
-        $this->dispatch('toast', message: 'Withdrawal retry initiated', type: 'success');
+            $this->logAdminAction('retry_withdrawal', $withdrawal, [
+                'amount' => $withdrawal->amount,
+                'reference' => $result['reference'] ?? null,
+            ]);
+
+            $this->dispatch('toast', message: 'Withdrawal retry initiated', type: 'success');
+        } else {
+            $this->dispatch('toast', message: 'Retry failed: '.($result['error'] ?? 'Unknown error'), type: 'error');
+        }
     }
 
     public function cancelWithdrawal(int $withdrawalId): void
     {
         $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
 
-        if ($withdrawal->status === 'rejected') {
+        if (in_array($withdrawal->status, ['rejected', 'refunded'], true)) {
             $this->dispatch('toast', message: 'Withdrawal already rejected', type: 'warning');
 
             return;
         }
 
-        $refundAmount = (float) $withdrawal->amount + (float) ($withdrawal->charge_amount ?? 0);
+        if ($withdrawal->status === 'paid' || $withdrawal->payout_status === 'completed') {
+            $this->dispatch('toast', message: 'Haiwezi kughairiwa — malipo yameshatumwa.', type: 'error');
 
-        // Refund amount to user's wallet
-        if ($withdrawal->user) {
-            $withdrawal->user->increment('wallet_balance', $refundAmount);
+            return;
+        }
 
-            \App\Models\Transaction::where('user_id', $withdrawal->user_id)
-                ->where(function ($q) use ($withdrawal) {
-                    $q->where('reference', 'WD-'.$withdrawal->id)
-                        ->orWhere(function ($sub) use ($withdrawal) {
+        $refunded = DB::transaction(function () use ($withdrawal): bool {
+            $locked = WithdrawalRequest::query()->lockForUpdate()->find($withdrawal->id);
+
+            if (! $locked || in_array($locked->status, ['rejected', 'refunded'], true)
+                || $locked->status === 'paid' || $locked->payout_status === 'completed') {
+                return false;
+            }
+
+            $user = $locked->user;
+
+            if (! $user) {
+                return false;
+            }
+
+            $refundAmount = (float) $locked->amount + (float) ($locked->charge_amount ?? 0);
+
+            $alreadyRefunded = Transaction::query()
+                ->where('user_id', $user->id)
+                ->where('type', 'credit')
+                ->where('reference', 'like', 'admin-reject-'.$locked->id.'-%')
+                ->exists();
+
+            if (! $alreadyRefunded) {
+                $user->increment('wallet_balance', $refundAmount);
+
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'type' => 'credit',
+                    'amount' => $refundAmount,
+                    'description' => 'Refund: Ombi la kutoa pesa limeghairiwa (#'.$locked->id.')',
+                    'balance_after' => $user->fresh()->wallet_balance,
+                    'reference' => 'admin-reject-'.$locked->id.'-'.now()->timestamp,
+                    'status' => 'completed',
+                ]);
+            }
+
+            Transaction::query()
+                ->where('user_id', $user->id)
+                ->where(function ($q) use ($locked): void {
+                    $q->where('reference', 'WD-'.$locked->id)
+                        ->orWhere(function ($sub) use ($locked): void {
                             $sub->where('type', 'withdrawal')
                                 ->where('status', 'processing')
-                                ->where('amount', $withdrawal->amount);
+                                ->where('amount', $locked->amount);
                         });
                 })
                 ->update(['status' => 'failed']);
 
-            \App\Models\Transaction::create([
-                'user_id' => $withdrawal->user_id,
-                'type' => 'credit',
-                'amount' => $refundAmount,
-                'description' => 'Refund: Ombi la kutoa pesa limeghairiwa (#'.$withdrawal->id.')',
-                'balance_after' => $withdrawal->user->fresh()->wallet_balance,
-                'reference' => 'admin-reject-'.$withdrawal->id.'-'.now()->timestamp,
-                'status' => 'completed',
+            $locked->update([
+                'status' => 'rejected',
+                'payout_status' => 'failed',
+                'processed_at' => now(),
             ]);
-        }
 
-        $withdrawal->update([
-            'status' => 'rejected',
-            'payout_status' => 'failed',
-            'processed_at' => now(),
-        ]);
+            return true;
+        });
+
+        if (! $refunded) {
+            $this->dispatch('toast', message: 'Ombi hili limeshashughulikiwa.', type: 'warning');
+
+            return;
+        }
 
         $this->logAdminAction('cancel_withdrawal', $withdrawal, [
             'amount' => $withdrawal->amount,

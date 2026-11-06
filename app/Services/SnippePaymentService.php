@@ -17,7 +17,7 @@ class SnippePaymentService
     {
         $this->apiKey = config('services.snippe.key');
         $this->baseUrl = config('services.snippe.url', 'https://api.snippe.sh');
-        $this->webhookBaseUrl = config('services.snippe.webhook_base_url', 'https://winga.ericksky.online');
+        $this->webhookBaseUrl = config('services.snippe.webhook_base_url', 'https://winga.hisgc.net');
     }
 
     /**
@@ -34,7 +34,7 @@ class SnippePaymentService
                 $phoneNumber = '255'.$phoneNumber;
             }
 
-            $webhookUrl = $this->webhookBaseUrl . '/api/webhooks/snippe';
+            $webhookUrl = $this->webhookBaseUrl.'/api/webhooks/snippe';
             $payload = [
                 'payment_type' => 'mobile',
                 'details' => [
@@ -91,9 +91,9 @@ class SnippePaymentService
                 $phoneNumber = '255'.substr($phoneNumber, 1);
             }
 
-            $webhookUrl = $this->webhookBaseUrl . '/api/webhooks/snippe';
-            $redirectUrl = $this->webhookBaseUrl . '/mteja/wallet';
-            $cancelUrl = $this->webhookBaseUrl . '/mteja/wallet?status=cancelled';
+            $webhookUrl = $this->webhookBaseUrl.'/api/webhooks/snippe';
+            $redirectUrl = $this->webhookBaseUrl.'/mteja/wallet';
+            $cancelUrl = $this->webhookBaseUrl.'/mteja/wallet?status=cancelled';
             $payload = [
                 'payment_type' => 'card',
                 'details' => [
