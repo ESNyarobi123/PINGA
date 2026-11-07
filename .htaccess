@@ -1,0 +1,30 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1) Block sensitive files (this file also covers requests under /public/)
+    RewriteRule (^|/)(\.env|\.git|\.editorconfig|\.gitattributes)(/|$) - [F,L]
+    RewriteRule (^|/)(composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|boost\.json|pint\.json)$ - [F,L]
+    RewriteRule \.(sql|pages|log)$ - [F,L]
+    RewriteRule (^|/)(run_migrations|fix_migrations|fix_all_migrations|create-storage-link|patch|make_pages|fix_collapses|fix_sidebars|fix_tables)\.php$ - [F,L]
+
+    # 2) Block framework and application folders
+    RewriteRule ^(app|bootstrap|config|database|lang|node_modules|resources|routes|tests|vendor|md)(/|$) - [F,L]
+
+    # 3) Serve real static assets from public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # 4) Nothing under /storage is public except through public/storage
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^storage(/|$) - [F,L]
+
+    # 5) Front controller for clean URLs
+    RewriteRule ^$ public/index.php [L]
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ public/index.php [L]
+</IfModule>
+
+Options -Indexes
