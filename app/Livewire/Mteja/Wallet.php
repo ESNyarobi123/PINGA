@@ -124,8 +124,13 @@ class Wallet extends Component
             $this->depositStep = 3; // Show waiting screen
             $this->paymentStatus = 'pending';
             $this->pollCount = 0;
+        } elseif (\App\Services\SnippePaymentService::isUnknownOutcome($response)) {
+            // The provider did not answer in time; the USSD push may still arrive.
+            session()->flash('info_message', 'Mtoa huduma hakujibu kwa muda. Ombi linaweza kuwa limetumwa — subiri USSD kwenye simu yako kabla ya kujaribu tena.');
+            $this->paymentStatus = 'pending';
+            $this->pollCount = 0;
         } else {
-            session()->flash('error_message', 'Imeshindikana kutengeneza muamala. Tafadhali jaribu tena.');
+            session()->flash('error_message', $response['message'] ?? 'Imeshindikana kutengeneza muamala. Tafadhali jaribu tena.');
         }
     }
 

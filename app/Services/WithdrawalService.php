@@ -104,6 +104,15 @@ class WithdrawalService
                 'retry_count' => $attempt,
                 'last_retry_at' => now(),
             ]);
+        } elseif (! empty($result['transient'])) {
+            // No definitive answer from the provider. Keep the row "in flight" so the
+            // in-flight guard blocks an immediate resend that could pay the user twice.
+            $withdrawal->update([
+                'payout_status' => 'processing',
+                'payout_error' => Str::limit((string) ($result['error'] ?? 'Hakuna uthibitisho kutoka kwa mtoa huduma.'), 480),
+                'retry_count' => $attempt,
+                'last_retry_at' => now(),
+            ]);
         } else {
             $withdrawal->update([
                 'payout_status' => 'failed',

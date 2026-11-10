@@ -256,9 +256,15 @@
                                 <p class="text-xs text-amber-600">Retries: {{ $stats['retry_count'] }}</p>
                                 @endif
                                 @if($request->payout_error)
-                                <p class="text-xs text-red-600 max-w-[240px] break-words" title="{{ $request->payout_error }}">
-                                    {{ \Illuminate\Support\Str::limit($request->payout_error, 90) }}
+                                <p class="text-xs {{ str_contains($request->payout_error, 'Salio la akaunti ya Snippe') ? 'text-amber-700 font-semibold' : 'text-red-600' }} max-w-[240px] break-words" title="{{ $request->payout_error }}">
+                                    {{ \Illuminate\Support\Str::limit($request->payout_error, 120) }}
                                 </p>
+                                @if(str_contains($request->payout_error, 'Salio la akaunti ya Snippe'))
+                                <a href="https://dashboard.snippe.sh" target="_blank" rel="noopener"
+                                   class="inline-flex items-center gap-1 text-xs font-semibold text-winga-600 hover:text-winga-700 underline">
+                                    Weka salio kwenye Snippe ↗
+                                </a>
+                                @endif
                                 @elseif($request->payout_status === 'failed')
                                 <p class="text-xs text-amber-700 max-w-[240px] break-words">
                                     {{ __('messages.admin_withdrawals.reason_not_recorded') }}

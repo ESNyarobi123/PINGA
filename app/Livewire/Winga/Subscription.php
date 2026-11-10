@@ -133,8 +133,23 @@ class Subscription extends Component
                 message: 'Ombi la malipo limetumwa. Subiri USSD push kwenye simu yako. Subscription itawashwa mara malipo yanapothibitishwa.',
                 type: 'info',
             );
+        } elseif (SnippePaymentService::isUnknownOutcome($result ?? [])) {
+            // Timeout: keep the row pending so a late webhook can still activate it.
+            $pending->update([
+                'notes' => 'order_id='.$orderId.' | timeout: awaiting provider confirmation',
+            ]);
+
+            $this->showConfirm = false;
+            $this->selectedPlanId = null;
+            $this->dispatch('toast',
+                message: 'Mtoa huduma hakujibu kwa muda. Ombi linaweza kuwa limetumwa — subiri USSD kwenye simu yako. Usijaribu tena mara moja.',
+                type: 'info',
+            );
         } else {
-            $pending->update(['payment_status' => 'failed', 'notes' => 'Snippe mobile payment request failed']);
+            $pending->update([
+                'payment_status' => 'failed',
+                'notes' => 'Snippe mobile payment request failed: '.($result['message'] ?? 'unknown error'),
+            ]);
             $this->dispatch('toast', message: 'Malipo hayakufanikiwa. Jaribu tena au tumia njia nyingine.', type: 'error');
         }
     }

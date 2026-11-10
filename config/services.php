@@ -39,7 +39,8 @@ return [
         'key' => env('SNIPPE_API_KEY'),
         'url' => env('SNIPPE_URL', 'https://api.snippe.sh'),
         'webhook_secret' => env('SNIPPE_WEBHOOK_SECRET'),
-        'webhook_base_url' => env('SNIPPE_WEBHOOK_BASE_URL', 'https://winga.hisgc.net'),
+        // Must be the public site URL, otherwise provider webhooks never reach this app.
+        'webhook_base_url' => env('SNIPPE_WEBHOOK_BASE_URL') ?: env('APP_URL', 'https://winga.hisgc.net'),
     ],
 
     'selcom' => [

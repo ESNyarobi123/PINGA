@@ -277,6 +277,18 @@ class MaombiKutoa extends Component
             return;
         }
 
+        if (! empty($result['transient'])) {
+            // The provider gave no definitive answer. Keep "processing" so the
+            // in-flight guard prevents a resend that could pay the user twice.
+            $this->dispatch(
+                'toast',
+                message: 'Ombi limeidhinishwa lakini hakuna uthibitisho kutoka Snippe: '.($result['error'] ?? 'timeout'),
+                type: 'warning',
+            );
+
+            return;
+        }
+
         $req->update([
             'payout_status' => 'failed',
             'payout_error' => $req->payout_error ?: ($result['error'] ?? null),

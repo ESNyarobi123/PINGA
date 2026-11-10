@@ -22,7 +22,7 @@ class VerifySnippeWebhookSignature
         $secret = config('services.snippe.webhook_secret');
 
         if (! $secret) {
-            Log::warning('Snippe webhook secret not configured — skipping signature verification');
+            Log::log(app()->environment('production') ? 'error' : 'warning', 'Snippe webhook secret not configured — signature verification is SKIPPED. Set SNIPPE_WEBHOOK_SECRET.');
 
             return $next($request);
         }

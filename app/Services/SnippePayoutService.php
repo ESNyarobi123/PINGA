@@ -24,8 +24,36 @@ class SnippePayoutService
     {
         $this->apiKey = config('services.snippe.key');
         $this->baseUrl = config('services.snippe.url', 'https://api.snippe.sh');
-        $webhookBase = config('services.snippe.webhook_base_url', 'https://winga.hisgc.net');
+        $webhookBase = rtrim((string) config('services.snippe.webhook_base_url', config('app.url')), '/');
         $this->webhookUrl = $webhookBase.'/api/webhooks/snippe-payout';
+    }
+
+    /**
+     * The webhook URL Snippe is told to call. Used by the diagnostics command.
+     */
+    public function webhookUrl(): string
+    {
+        return $this->webhookUrl;
+    }
+
+    /**
+     * Warn (once per request) when the webhook host does not match the app host.
+     * A stale SNIPPE_WEBHOOK_BASE_URL means confirmations never reach this app.
+     */
+    public function warnIfWebhookHostMismatch(): void
+    {
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $webhookHost = parse_url($this->webhookUrl, PHP_URL_HOST);
+
+        if (! $appHost || ! $webhookHost || strcasecmp($appHost, $webhookHost) === 0) {
+            return;
+        }
+
+        Log::warning('Snippe webhook host does not match APP_URL — payouts may never be confirmed', [
+            'app_url' => config('app.url'),
+            'webhook_url' => $this->webhookUrl,
+            'fix' => 'Set SNIPPE_WEBHOOK_BASE_URL to the public site URL and clear the config cache.',
+        ]);
     }
 
     /**
@@ -149,13 +177,15 @@ class SnippePayoutService
             'network' => $network,
         ]);
 
+        $this->warnIfWebhookHostMismatch();
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->apiKey}",
                 'Idempotency-Key' => $data['idempotency_key'],
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-            ])->timeout(30)->post("{$this->baseUrl}/v1/payouts/send", $payload);
+            ])->connectTimeout(15)->timeout(45)->post("{$this->baseUrl}/v1/payouts/send", $payload);
 
             $result = $response->json() ?? [];
 
@@ -172,18 +202,47 @@ class SnippePayoutService
                 ];
             }
 
+            $errorCode = $result['error_code'] ?? $result['code'] ?? null;
+
             Log::error('Snippe Payout API Error', [
                 'status' => $response->status(),
+                'error_code' => $errorCode,
                 'body' => $response->body(),
+                'payload' => $payload,
+            ]);
+
+            $rawError = (string) ($result['message'] ?? 'Snippe payout failed');
+            $humanError = $this->humaniseError($rawError, is_string($errorCode) ? $errorCode : null);
+
+            // Keep the provider's own wording for support without hiding the instruction.
+            if ($rawError !== '' && ! str_contains($humanError, $rawError)) {
+                $humanError .= ' — '.$rawError;
+            }
+
+            return [
+                'success' => false,
+                'error' => $humanError,
+                'raw_error' => $rawError,
+                'error_code' => $errorCode,
+                'transient' => false,
+                'data' => $result,
+            ];
+
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // Timeout: Snippe may still have accepted the request. The admin must
+            // verify in the Snippe dashboard before sending another payout.
+            Log::error('Snippe Payout Connection Error', [
+                'message' => $e->getMessage(),
                 'payload' => $payload,
             ]);
 
             return [
                 'success' => false,
-                'error' => $result['message'] ?? 'Snippe payout failed',
-                'data' => $result,
+                'error' => 'Mtoa huduma hakujibu kwa muda (timeout). Ombi linaweza kuwa limefika Snippe — thibitisha kwenye dashboard ya Snippe kabla ya kutuma tena.',
+                'raw_error' => $e->getMessage(),
+                'error_code' => 'TIMEOUT',
+                'transient' => true,
             ];
-
         } catch (\Exception $e) {
             Log::error('Snippe Payout Exception', [
                 'message' => $e->getMessage(),
@@ -192,9 +251,28 @@ class SnippePayoutService
 
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
+                'error' => $this->humaniseError($e->getMessage()),
+                'raw_error' => $e->getMessage(),
+                'error_code' => 'EXCEPTION',
+                'transient' => true,
             ];
         }
+    }
+
+    /**
+     * Turn provider error codes into an instruction the admin can act on.
+     */
+    public function humaniseError(string $message, ?string $errorCode = null): string
+    {
+        $code = strtoupper((string) $errorCode);
+
+        return match (true) {
+            $code === 'PAY_004' || str_contains(strtolower($message), 'insufficient balance') => 'Salio la akaunti ya Snippe (merchant) halitoshi kutuma malipo. Weka salio kwenye dashboard ya Snippe kisha bonyeza "Jaribu Tena".',
+            $code === 'TIMEOUT' || str_contains(strtolower($message), 'timed out') || str_contains(strtolower($message), 'curl error 28') => 'Mtoa huduma hakujibu kwa muda (timeout). Ombi linaweza kuwa limefika Snippe — thibitisha kwenye dashboard ya Snippe kabla ya kutuma tena.',
+            str_contains(strtolower($message), 'unauthorized') || str_contains(strtolower($message), 'invalid api key') => 'API key ya Snippe haikubaliki. Angalia SNIPPE_API_KEY kwenye .env.',
+            str_contains(strtolower($message), 'recipient') || str_contains(strtolower($message), 'phone') => 'Namba ya simu ya mpokeaji haikubaliki na mtoa huduma. Hakikisha namba ni sahihi.',
+            default => $message !== '' ? $message : 'Payout imeshindwa bila maelezo.',
+        };
     }
 
     /**
