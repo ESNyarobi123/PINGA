@@ -234,9 +234,22 @@ class MaombiKutoa extends Component
     {
         $req = WithdrawalRequest::with('user')->findOrFail($id);
 
+        if (in_array($req->status, ['rejected', 'refunded', 'paid'], true) || $req->payout_status === 'completed') {
+            $this->dispatch('toast', message: 'Ombi hili limeshashughulikiwa.', type: 'warning');
+
+            return;
+        }
+
+        // Never pay twice: a payout that is still in flight is not approved again.
+        if ($req->hasPayoutInFlight()) {
+            $this->dispatch('toast', message: 'Malipo ya ombi hili bado yanasubiri uthibitisho wa mtoa huduma.', type: 'warning');
+
+            return;
+        }
+
         $req->update([
             'status' => 'approved',
-            'approved_at' => now(),
+            'approved_at' => $req->approved_at ?? now(),
             'approved_by' => auth()->id(),
         ]);
 
@@ -244,10 +257,38 @@ class MaombiKutoa extends Component
             'amount' => $req->amount,
         ]);
 
-        // Automatically process the approved withdrawal
-        $this->retryWithdrawal($id);
+        // Approval is the only place that starts a payout. Declining refunds instead.
+        $result = app(WithdrawalService::class)->retry($req->fresh());
 
-        $this->dispatch('toast', message: 'Withdrawal approved and processing', type: 'success');
+        $req->refresh();
+
+        if ($result['success']) {
+            $this->logAdminAction('retry_withdrawal', $req, [
+                'reference' => $result['reference'] ?? null,
+                'retry_count' => $req->retry_count,
+            ]);
+
+            $this->dispatch(
+                'toast',
+                message: 'Ombi limeidhinishwa. TZS '.number_format((float) $req->amount).' inatumwa kwa '.$req->networkLabel().'.',
+                type: 'success',
+            );
+
+            return;
+        }
+
+        $req->update([
+            'payout_status' => 'failed',
+            'payout_error' => $req->payout_error ?: ($result['error'] ?? null),
+        ]);
+
+        Log::error("Admin approveWithdrawal {$id} payout failed", $result);
+
+        $this->dispatch(
+            'toast',
+            message: 'Limeidhinishwa lakini malipo hayajatumwa: '.($result['error'] ?? 'Unknown error'),
+            type: 'error',
+        );
     }
 
     public function confirmReject(): void
@@ -423,6 +464,33 @@ class MaombiKutoa extends Component
             return $this->exportRequestsList($requests, 'selected_withdrawals_');
         }
 
+        if ($this->bulkAction === 'approve') {
+            $paid = 0;
+            $kept = 0;
+
+            $requests->each(function (WithdrawalRequest $request) use (&$paid, &$kept): void {
+                $this->approveWithdrawal($request->id);
+
+                $fresh = $request->fresh();
+
+                if ($fresh->payout_status === 'processing' && filled($fresh->payout_reference)) {
+                    $paid++;
+                } else {
+                    $kept++;
+                }
+            });
+
+            $this->reset(['selectedRequests', 'selectAll', 'bulkAction']);
+
+            $this->dispatch(
+                'toast',
+                message: "Idhini: {$paid} zimelipwa, {$kept} zimeshindikana au hazikustahili.",
+                type: $kept > 0 ? 'warning' : 'success',
+            );
+
+            return;
+        }
+
         if ($this->bulkAction === 'retry') {
             $sent = 0;
             $blocked = 0;
@@ -457,7 +525,6 @@ class MaombiKutoa extends Component
         }
 
         match ($this->bulkAction) {
-            'approve' => $requests->each(fn ($req) => $this->approveWithdrawal($req->id)),
             'reject' => $requests->each(fn ($req) => $this->rejectWithdrawal($req->id, 'Bulk rejection')),
         };
 

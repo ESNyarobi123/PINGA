@@ -75,7 +75,7 @@
                 <span class="text-xs font-medium text-zinc-500">{{ __('messages.admin_withdrawals.pending_amount') }}</span>
             </div>
             <p class="text-xl font-bold text-zinc-900 dark:text-white">TZS {{ number_format($pendingAmount) }}</p>
-            <p class="text-xs text-zinc-500">{{ __('messages.admin_withdrawals.awaiting_processing') }}</p>
+            <p class="text-xs text-zinc-500">{{ __('messages.admin_withdrawals.awaiting_approval') }}</p>
         </div>
     </div>
 
@@ -149,7 +149,7 @@
                 <select wire:model.live="bulkAction" class="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white">
                     <option value="">{{ __('messages.admin_withdrawals.bulk_actions') }}</option>
                     <option value="export">📥 {{ __('Pakua Zilizochaguliwa (Export CSV)') }}</option>
-                    <option value="approve">✅ {{ __('messages.admin_withdrawals.approve') }}</option>
+                    <option value="approve">✅ {{ __('messages.admin_withdrawals.approve_pay') }}</option>
                     <option value="reject">❌ {{ __('messages.admin_withdrawals.reject') }}</option>
                     <option value="retry">🔄 {{ __('messages.admin_withdrawals.retry') }}</option>
                 </select>
@@ -207,9 +207,10 @@
                     @forelse($requests as $request)
                     @php 
                         $stats = $this->getWithdrawalStats($request);
-                        $isPaid = $request->status === 'completed' || $request->status === 'paid' || $request->payout_status === 'completed';
-                        $isFailed = $request->payout_status === 'failed' || $request->status === 'rejected';
-                        $isProcessing = $request->payout_status === 'processing';
+                        $isPaid = in_array($request->status, ['paid', 'completed'], true) || $request->payout_status === 'completed';
+                        $isRefunded = in_array($request->status, ['rejected', 'refunded'], true);
+                        $isFailed = ! $isPaid && ! $isRefunded && $request->payout_status === 'failed';
+                        $isProcessing = ! $isPaid && ! $isRefunded && $request->payout_status === 'processing';
                         $isPending = $request->status === 'pending';
                     @endphp
                     <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800 transition {{ $isFailed ? 'bg-red-50/30 dark:bg-red-900/5' : '' }}">
@@ -260,7 +261,11 @@
                                 </p>
                                 @elseif($request->payout_status === 'failed')
                                 <p class="text-xs text-amber-700 max-w-[240px] break-words">
-                                    Sababu haikurekodiwa (payout ya kabla ya 10 Nov). Thibitisha kwenye Snippe dashboard kabla ya retry.
+                                    {{ __('messages.admin_withdrawals.reason_not_recorded') }}
+                                </p>
+                                @elseif($isPending)
+                                <p class="text-xs text-amber-600 max-w-[240px] break-words">
+                                    {{ __('messages.admin_withdrawals.awaiting_admin_hint') }}
                                 </p>
                                 @endif
                             </div>
@@ -294,31 +299,35 @@
                             </div>
                         </td>
                         <td class="px-4 py-3">
-                            <div class="flex items-center gap-1">
+                            <div class="flex flex-wrap items-center gap-1">
                                 @if($isPaid)
-                                    <span class="text-xs text-green-600 font-medium">Imekamilika</span>
-                                @elseif($request->payout_status === 'failed' && in_array($request->status, ['pending', 'approved'], true))
-                                <button wire:click="retryWithdrawal({{ $request->id }})"
-                                        wire:confirm="Tuma payout ya TZS {{ number_format($request->amount) }} kwa {{ $request->networkLabel() }} {{ $request->account_number }}?"
-                                        wire:loading.attr="disabled"
-                                        wire:target="retryWithdrawal({{ $request->id }})"
-                                        class="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded transition disabled:opacity-50">
-                                    🔄 {{ __('messages.admin_withdrawals.retry') }}
-                                </button>
-                                @elseif($request->status === 'rejected')
-                                    <span class="text-xs text-zinc-500">Imerejeshwa kwa wallet</span>
+                                    <span class="text-xs text-green-600 font-medium">{{ __('messages.admin_withdrawals.completed') }}</span>
+                                @elseif($request->status === 'rejected' || $request->status === 'refunded')
+                                    <span class="text-xs text-zinc-500">{{ __('messages.admin_withdrawals.refunded_to_wallet') }}</span>
                                 @elseif($isProcessing)
                                 <button wire:click="markAsCompleted({{ $request->id }})"
                                         wire:confirm="{{ __('messages.admin_withdrawals.confirm_complete') }}"
                                         class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition">
                                     ✅ {{ __('messages.admin_withdrawals.complete') }}
                                 </button>
-                                @elseif($isPending)
-                                <button wire:click="approveWithdrawal({{ $request->id }})"
-                                        wire:confirm="{{ __('messages.admin_withdrawals.confirm_approve') }}"
-                                        class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition">
-                                    ✅ {{ __('messages.admin_withdrawals.approve') }}
+                                @else
+                                    @if($request->payout_status === 'failed')
+                                <button wire:click="retryWithdrawal({{ $request->id }})"
+                                        wire:confirm="{{ __('messages.admin_withdrawals.confirm_approve_pay', ['amount' => number_format($request->amount), 'network' => $request->networkLabel(), 'phone' => $request->account_number]) }}"
+                                        wire:loading.attr="disabled"
+                                        wire:target="retryWithdrawal({{ $request->id }})"
+                                        class="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded transition disabled:opacity-50">
+                                    🔄 {{ __('messages.admin_withdrawals.retry') }}
                                 </button>
+                                    @else
+                                <button wire:click="approveWithdrawal({{ $request->id }})"
+                                        wire:confirm="{{ __('messages.admin_withdrawals.confirm_approve_pay', ['amount' => number_format($request->amount), 'network' => $request->networkLabel(), 'phone' => $request->account_number]) }}"
+                                        wire:loading.attr="disabled"
+                                        wire:target="approveWithdrawal({{ $request->id }})"
+                                        class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition disabled:opacity-50">
+                                    ✅ {{ __('messages.admin_withdrawals.approve_pay') }}
+                                </button>
+                                    @endif
                                 <button wire:click="$set('selectedRequestId', {{ $request->id }})"
                                         class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition">
                                     ❌ {{ __('messages.admin_withdrawals.reject') }}

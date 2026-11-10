@@ -3,6 +3,7 @@
 use App\Livewire\Admin\MaombiKutoa;
 use App\Livewire\Admin\MigogoroDetail;
 use App\Livewire\Mteja\Wallet;
+use App\Livewire\Winga\TombaOmbi;
 use App\Livewire\Winga\WekaCode;
 use App\Models\Dispute;
 use App\Models\Job;
@@ -489,4 +490,85 @@ test('the audit summary separates informational notes from ledger failures', fun
     $this->artisan('payments:audit')
         ->expectsOutputToContain('note 1')
         ->assertExitCode(0);
+});
+test('a winga withdrawal request waits for admin approval and sends no payout', function () {
+    Http::fake();
+
+    $worker = User::factory()->create([
+        'role' => 'winga',
+        'wallet_balance' => 50000,
+        'phone' => '0788909090',
+    ]);
+
+    Livewire::actingAs($worker)
+        ->test(TombaOmbi::class)
+        ->call('openForm')
+        ->set('network', 'tigo')
+        ->set('phone', '0715553803')
+        ->set('amount', '10000')
+        ->call('submit')
+        ->assertHasNoErrors();
+
+    $withdrawal = WithdrawalRequest::where('user_id', $worker->id)->firstOrFail();
+
+    expect($withdrawal->status)->toBe('pending');
+    expect($withdrawal->payout_status)->toBe('pending');
+    expect($withdrawal->payout_reference)->toBeNull();
+    expect($withdrawal->network)->toBe('Tigo');
+    expect((float) $worker->fresh()->wallet_balance)->toBe(40000.0);
+    Http::assertNothingSent();
+});
+
+test('admin approval is what triggers the payout for a winga request', function () {
+    Http::fake([
+        'api.snippe.sh/v1/payouts/send' => Http::response([
+            'status' => 'success',
+            'data' => ['id' => 'po_approve_1', 'status' => 'pending'],
+        ], 200),
+    ]);
+
+    $admin = User::factory()->create(['role' => 'admin']);
+    $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 40000]);
+    $withdrawal = payoutWithdrawal($worker, [
+        'charge_amount' => 0,
+        'network' => 'Tigo',
+        'account_number' => '0715553803',
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(MaombiKutoa::class)
+        ->call('approveWithdrawal', $withdrawal->id);
+
+    $withdrawal->refresh();
+
+    expect($withdrawal->status)->toBe('approved');
+    expect($withdrawal->payout_status)->toBe('processing');
+    expect($withdrawal->payout_reference)->toBe('po_approve_1');
+    Http::assertSentCount(1);
+});
+
+test('admin rejecting a winga request refunds the wallet and sends nothing', function () {
+    Http::fake();
+
+    $admin = User::factory()->create(['role' => 'admin']);
+    $worker = User::factory()->create(['role' => 'winga', 'wallet_balance' => 40000]);
+    $withdrawal = payoutWithdrawal($worker, [
+        'charge_amount' => 0,
+        'network' => 'Airtel',
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(MaombiKutoa::class)
+        ->call('rejectWithdrawal', $withdrawal->id, 'Namba si sahihi');
+
+    $withdrawal->refresh();
+
+    expect($withdrawal->status)->toBe('rejected');
+    expect($withdrawal->payout_status)->toBe('failed');
+    expect((float) $worker->fresh()->wallet_balance)->toBe(50000.0);
+    Http::assertNothingSent();
 });

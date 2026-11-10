@@ -6,11 +6,10 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Notifications\WingaNotification;
-use App\Services\SelcomPayoutService;
+use App\Services\SettingsService;
 use App\Services\SnippePayoutService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -58,49 +57,49 @@ class TombaOmbi extends Component
     public function submit(): void
     {
         $user = auth()->user();
+        $minAmount = SettingsService::minWithdrawalAmount();
 
         $this->validate([
-            'amount' => ['required', 'numeric', 'min:5000', 'max:'.(float) $user->wallet_balance],
+            'amount' => ['required', 'numeric', 'min:'.$minAmount, 'max:'.(float) $user->wallet_balance],
             'phone' => ['required', 'string', 'min:10'],
             'network' => ['required', 'in:airtel,vodacom,tigo,halopesa'],
         ], [
-            'amount.min' => 'Kiwango cha chini cha kutoa ni TZS 5,000',
+            'amount.min' => 'Kiwango cha chini cha kutoa ni TZS '.number_format($minAmount),
             'amount.max' => 'Hauwezi kutoa zaidi ya salio lako la TZS '.number_format((float) $user->wallet_balance),
             'phone.required' => 'Namba ya simu inahitajika',
         ]);
 
         $withdrawalAmount = (float) $this->amount;
-        $networkCode = ucfirst($this->network); // airtel → Airtel, tigo → Tigo
+        $networkLabel = app(SnippePayoutService::class)
+            ->normaliseNetwork($this->network, (string) $this->phone);
 
-        $withdrawal = DB::transaction(function () use ($user, $withdrawalAmount, $networkCode) {
-            // 1. Deduct from wallet immediately (held pending payout)
+        $methodValue = match (strtolower($this->network)) {
+            'airtel' => 'airtel_money',
+            'vodacom' => 'mpesa',
+            'tigo' => 'tigopesa',
+            default => 'mpesa',
+        };
+
+        $withdrawal = DB::transaction(function () use ($user, $withdrawalAmount, $networkLabel, $methodValue) {
+            // Hold the money in escrow inside the wallet: it is released to the user as a
+            // payout only after an admin approves the request.
             $user->decrement('wallet_balance', $withdrawalAmount);
 
-            // Map network to existing method enum value
-            $methodValue = match (strtolower($this->network)) {
-                'airtel' => 'airtel_money',
-                'vodacom' => 'mpesa',
-                'tigo' => 'tigopesa',
-                default => 'mpesa',
-            };
-
-            // 2. Create withdrawal record
             $withdrawal = WithdrawalRequest::create([
                 'user_id' => $user->id,
                 'amount' => $withdrawalAmount,
                 'method' => $methodValue,
-                'network' => $networkCode,
+                'network' => $networkLabel,
                 'account_number' => $this->phone,
                 'status' => 'pending',
                 'payout_status' => 'pending',
             ]);
 
-            // 3. Create debit transaction record
             Transaction::create([
                 'user_id' => $user->id,
                 'type' => 'withdrawal',
                 'amount' => $withdrawalAmount,
-                'description' => 'Kutoa pesa — '.$networkCode,
+                'description' => 'Ombi la kutoa pesa — '.$networkLabel,
                 'balance_after' => $user->fresh()->wallet_balance,
                 'reference' => 'WD-'.$withdrawal->id,
                 'status' => 'processing',
@@ -109,101 +108,38 @@ class TombaOmbi extends Component
             return $withdrawal;
         });
 
-        // The payout call is made OUTSIDE the transaction: never keep a DB transaction
-        // open while talking to an external provider, otherwise a rollback can leave
-        // money sent with no withdrawal row to show for it.
-        $reference = 'W'.$withdrawal->id.'T'.now()->timestamp;
-        $payoutSuccess = false;
-        $payoutError = null;
+        // Nothing is sent to Snippe/Selcom here on purpose. The admin reviews the request
+        // in /admin/maombi-kutoa and only then does "Approve" trigger the payout.
+        $user->notify(new WingaNotification(
+            title: '⏳ Ombi Lako Limepokelewa',
+            message: 'Ombi la kutoa TZS '.number_format($withdrawalAmount).' linahitaji idhini ya admin. Utapata taarifa mara litakapokamilika.',
+            icon: 'clock',
+            color: 'amber',
+            action_url: route('winga.tomba-ombi'),
+            action_label: 'Angalia Hali',
+        ));
 
-        // Try Selcom first
-        if (config('services.selcom.api_key')) {
-            $selcom = app(SelcomPayoutService::class);
-            $result = $selcom->sendPayout([
-                'amount' => (int) $withdrawalAmount,
-                'phone' => $this->phone,
-                'name' => $user->name,
-                'narration' => 'Kutoa pesa - Winga Platform',
-                'reference' => $reference,
-                'metadata' => [
-                    'type' => 'withdrawal',
-                    'user_id' => $user->id,
-                    'withdrawal_id' => $withdrawal->id,
-                ],
-            ]);
+        User::where('role', 'admin')->get()->each(function (User $admin) use ($withdrawal, $withdrawalAmount, $networkLabel): void {
+            $admin->notify(new WingaNotification(
+                title: '💸 Ombi Jipya la Kutoa Pesa',
+                message: $withdrawal->user->name.' anaomba kutoa TZS '.number_format($withdrawalAmount)
+                    .' kwa '.$networkLabel.' '.$withdrawal->account_number.'. Idhinisha au kataa.',
+                icon: 'banknotes',
+                color: 'amber',
+                action_url: route('admin.maombi-kutoa'),
+                action_label: 'Angalia Maombi',
+            ));
+        });
 
-            if ($result['success']) {
-                $withdrawal->update([
-                    'payout_reference' => $result['reference'],
-                    'payout_status' => 'processing',
-                ]);
-                Log::info("TombaOmbi: Selcom payout sent for withdrawal {$withdrawal->id}", $result);
-                $payoutSuccess = true;
-            } else {
-                $payoutError = $result['error'] ?? null;
-                Log::warning("TombaOmbi: Selcom payout failed, falling back to Snippe for withdrawal {$withdrawal->id}", $result);
-            }
-        }
+        Log::info("TombaOmbi: withdrawal {$withdrawal->id} created and waiting for admin approval");
 
-        // Fallback to Snippe if Selcom failed or not configured
-        if (! $payoutSuccess) {
-            $snippe = app(SnippePayoutService::class);
-            $result = $snippe->sendPayout([
-                'amount' => (int) $withdrawalAmount,
-                'phone' => $this->phone,
-                'name' => $user->name,
-                'network' => $networkCode,
-                'narration' => 'Kutoa pesa - Winga Platform',
-                'idempotency_key' => $reference,
-                'metadata' => [
-                    'type' => 'withdrawal',
-                    'user_id' => $user->id,
-                    'withdrawal_id' => $withdrawal->id,
-                ],
-            ]);
-
-            if ($result['success']) {
-                $withdrawal->update([
-                    'payout_reference' => $result['reference'],
-                    'payout_status' => 'processing',
-                ]);
-                Log::info("TombaOmbi: Snippe payout sent for withdrawal {$withdrawal->id}", $result);
-            } else {
-                $payoutError = $result['error'] ?? $payoutError;
-
-                $withdrawal->update([
-                    'payout_status' => 'failed',
-                    'payout_error' => Str::limit((string) ($payoutError ?? 'Payout imeshindwa bila maelezo.'), 480),
-                ]);
-
-                Log::error("TombaOmbi: All payout providers failed for withdrawal {$withdrawal->id}", $result);
-
-                $user->notify(new WingaNotification(
-                    title: '⏳ Ombi Linashughulikiwa',
-                    message: 'Kuna tatizo la muda na mtoa huduma. Malipo yako ya TZS '.number_format($withdrawalAmount).' yatafanyika ndani ya dakika 30.',
-                    icon: 'clock',
-                    color: 'amber',
-                    action_url: route('winga.tomba-ombi'),
-                    action_label: 'Angalia Hali',
-                ));
-
-                User::where('role', 'admin')->get()->each(function (User $admin) use ($withdrawal, $withdrawalAmount): void {
-                    $admin->notify(new WingaNotification(
-                        title: '🚨 Payout ya withdrawal imeshindwa',
-                        message: 'Withdrawal #'.$withdrawal->id.' ya TZS '.number_format($withdrawalAmount).' imeshindwa. Angalia na ujaribu tena.',
-                        icon: 'x-circle',
-                        color: 'red',
-                        action_url: route('admin.maombi-kutoa'),
-                        action_label: 'Angalia Maombi',
-                    ));
-                });
-            }
-        }
-
-        $displayAmount = $withdrawalAmount;
         $this->showForm = false;
         $this->reset(['amount']);
-        $this->dispatch('toast', message: 'Ombi lako linashughulikiwa. Utapokea TZS '.number_format($displayAmount).' kwenye simu yako hivi karibuni!', type: 'success');
+        $this->dispatch(
+            'toast',
+            message: 'Ombi la TZS '.number_format($withdrawalAmount).' limetumwa. Litasubiri idhini ya admin kabla ya malipo.',
+            type: 'success',
+        );
     }
 
     public function render()
