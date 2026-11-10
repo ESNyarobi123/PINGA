@@ -75,6 +75,7 @@ class SnippeWebhookController extends Controller
                 $reference,
                 $orderId,
                 $subscriptionId,
+                $this->resolveAmount($data),
             );
         }
 
@@ -213,6 +214,7 @@ class SnippeWebhookController extends Controller
         ?string $reference,
         ?string $orderId,
         ?int $subscriptionId,
+        float $amount = 0,
     ) {
         $pending = $this->resolvePendingSubscription($userId, $reference, $orderId, $subscriptionId);
 
@@ -262,6 +264,8 @@ class SnippeWebhookController extends Controller
             return response()->json(['status' => 'success']);
         }
 
+        $this->flagAmountMismatch($pending, $amount, $reference);
+
         $plan = $pending->subscriptionPlan()->first()
             ?? SubscriptionPlan::where('slug', $pending->plan_slug)->first();
 
@@ -279,12 +283,7 @@ class SnippeWebhookController extends Controller
                 $service = app(SubscriptionService::class);
                 $service->activate($user, $plan, $activationReference, 'snippe');
 
-                if ($pending->exists) {
-                    $pending->update([
-                        'payment_status' => 'completed',
-                        'notes' => 'Activated via Snippe webhook',
-                    ]);
-                }
+                $this->markPlaceholderActivated($pending);
             });
 
             Log::info("Subscription activated via webhook: user={$user->id} plan={$plan->slug}");
@@ -344,6 +343,50 @@ class SnippeWebhookController extends Controller
             ->where('payment_status', 'pending')
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * Mark the pending placeholder as paid without dropping the order_id audit
+     * trail stored in its notes. The row may already be the activated one.
+     */
+    /**
+     * Warn admins when the provider charged a different amount than the one quoted
+     * for the pending subscription (price edits between request and confirmation).
+     */
+    private function flagAmountMismatch(Subscription $pending, float $paidAmount, ?string $reference): void
+    {
+        $expected = (float) $pending->amount_paid;
+
+        if ($paidAmount <= 0 || $expected <= 0 || abs($expected - $paidAmount) <= 1) {
+            return;
+        }
+
+        Log::warning('Subscription Webhook: amount mismatch', [
+            'subscription_id' => $pending->id,
+            'expected' => $expected,
+            'received' => $paidAmount,
+            'reference' => $reference,
+        ]);
+
+        $this->alertAdmins(
+            'Subscription: kiasi hakilingani',
+            "Malipo ya subscription #{$pending->id} yalitarajiwa TZS ".number_format($expected)
+                .' lakini Snippe imetuma TZS '.number_format($paidAmount)." (ref {$reference}).",
+        );
+    }
+
+    private function markPlaceholderActivated(Subscription $pending): void
+    {
+        $placeholder = Subscription::find($pending->id);
+
+        if (! $placeholder) {
+            return;
+        }
+
+        $placeholder->update([
+            'payment_status' => 'completed',
+            'notes' => trim(($placeholder->notes ? $placeholder->notes.' | ' : '').'Activated via Snippe webhook'),
+        ]);
     }
 
     private function alertAdmins(string $title, string $message): void

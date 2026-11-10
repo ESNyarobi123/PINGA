@@ -132,6 +132,15 @@ class AuditPayments extends Command
         $rows[] = ['Subscription payments pending for over 24 hours', $stuckSubscriptions, ''];
         $critical = $critical || $stuckSubscriptions > 0;
 
+        // Old mobile flow left the pending placeholder paid-but-cancelled next to the real row.
+        $orphanPlaceholders = Subscription::query()
+            ->where('status', 'cancelled')
+            ->where('payment_status', 'completed')
+            ->whereNull('starts_at')
+            ->pluck('id');
+
+        $rows[] = ['Paid subscription placeholders left by the old mobile flow', $orphanPlaceholders->count(), $orphanPlaceholders->take(10)->implode(', ')];
+
         $duplicateRefundReferences = Transaction::query()
             ->select('reference')
             ->whereNotNull('reference')

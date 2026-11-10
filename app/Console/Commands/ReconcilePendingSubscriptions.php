@@ -107,9 +107,9 @@ class ReconcilePendingSubscriptions extends Command
             DB::transaction(function () use ($user, $plan, $row, $activationReference, $subscriptions) {
                 $subscriptions->activate($user, $plan, $activationReference, 'snippe');
 
-                $row->update([
+                Subscription::whereKey($row->id)->update([
                     'payment_status' => 'completed',
-                    'notes' => 'Reconciled via status polling',
+                    'notes' => trim(($row->notes ? $row->notes.' | ' : '').'Reconciled via status polling'),
                 ]);
             });
 

@@ -93,16 +93,66 @@ class SubscriptionService
                 );
             }
 
+            $placeholder = $this->pendingPlaceholder($user, $plan);
+            $paidAmount = (float) ($placeholder?->amount_paid ?: $plan->price);
+
             $subscription = $this->renewSubscription($user, $active, $plan, $paymentReference, $paymentMethod);
-            $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod);
+
+            // The renewal extends the existing row, so the pending placeholder
+            // from the Snippe attempt is merged into it (never shown twice).
+            $this->mergePlaceholder($placeholder, $subscription);
+
+            $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod, $paidAmount);
 
             return $subscription;
         }
 
-        $subscription = $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod);
-        $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod);
+        $placeholder = $paymentMethod === 'admin' ? null : $this->pendingPlaceholder($user, $plan);
+        $paidAmount = (float) ($placeholder?->amount_paid ?: $plan->price);
+
+        $subscription = $this->activateReplaceExisting($user, $plan, $paymentReference, $paymentMethod, $placeholder);
+        $this->recordLedgerPayment($subscription, $user, $plan, $paymentReference, $paymentMethod, $paidAmount);
 
         return $subscription;
+    }
+
+    /**
+     * The pending row created by {@see createPending()} for this user and plan.
+     */
+    private function pendingPlaceholder(User $user, SubscriptionPlan $plan): ?Subscription
+    {
+        return Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('subscription_plan_id', $plan->id)
+            ->where('payment_status', 'pending')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Fold a pending placeholder into the subscription row that was just renewed.
+     *
+     * The renewal extends the existing row and the ledger row written right after
+     * this keeps the Snippe reference, so the placeholder is removed instead of
+     * leaving a second "cancelled but paid" row in the admin list.
+     */
+    private function mergePlaceholder(?Subscription $placeholder, Subscription $subscription): void
+    {
+        if (! $placeholder || $placeholder->is($subscription)) {
+            return;
+        }
+
+        if (SubscriptionPayment::query()->where('subscription_id', $placeholder->id)->exists()) {
+            return;
+        }
+
+        Log::info('Subscription placeholder merged into renewal', [
+            'placeholder_id' => $placeholder->id,
+            'subscription_id' => $subscription->id,
+            'order_reference' => $placeholder->payment_reference,
+        ]);
+
+        $placeholder->delete();
     }
 
     /**
@@ -112,28 +162,39 @@ class SubscriptionService
         User $user,
         SubscriptionPlan $plan,
         string $paymentReference,
-        string $paymentMethod = 'wallet'
+        string $paymentMethod = 'wallet',
+        ?Subscription $placeholder = null
     ): Subscription {
-        return DB::transaction(function () use ($user, $plan, $paymentReference, $paymentMethod) {
+        return DB::transaction(function () use ($user, $plan, $paymentReference, $paymentMethod, $placeholder) {
             Subscription::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->update(['status' => 'expired']);
 
             $now = now();
 
-            $subscription = Subscription::create([
-                'user_id' => $user->id,
+            $attributes = [
                 'subscription_plan_id' => $plan->id,
                 'plan' => 'basic', // keep old enum valid
                 'plan_slug' => $plan->slug,
-                'amount_paid' => $plan->price,
+                'amount_paid' => (float) ($placeholder?->amount_paid ?: $plan->price),
                 'starts_at' => $now,
                 'expires_at' => $now->copy()->addDays($plan->duration_days),
                 'status' => 'active',
                 'payment_status' => 'completed',
                 'payment_reference' => $paymentReference,
                 'payment_method' => $paymentMethod,
-            ]);
+            ];
+
+            if ($placeholder && (int) $placeholder->user_id === (int) $user->id) {
+                // Promote the pending Snippe placeholder instead of leaving a
+                // second, cancelled copy of the same purchase behind.
+                $placeholder->update($attributes);
+                $subscription = $placeholder->fresh();
+            } else {
+                $subscription = Subscription::create($attributes + [
+                    'user_id' => $user->id,
+                ]);
+            }
 
             $user->notify(new WingaNotification(
                 title: '⭐ Subscription Imewashwa!',
@@ -214,7 +275,7 @@ class SubscriptionService
         SubscriptionPlan $plan,
         string $paymentReference,
         string $paymentMethod,
-        ?string $providerReference = null,
+        ?float $amount = null,
     ): void {
         if (! \Illuminate\Support\Facades\Schema::hasTable('subscription_payments')) {
             return;
@@ -224,14 +285,10 @@ class SubscriptionService
             'user_id' => $user->id,
             'subscription_plan_id' => $plan->id,
             'plan_slug' => $plan->slug,
-            'amount' => $plan->price,
+            'amount' => $amount ?? (float) $plan->price,
             'payment_method' => $paymentMethod,
             'paid_at' => now(),
         ];
-
-        if ($providerReference && \Illuminate\Support\Facades\Schema::hasColumn('subscription_payments', 'provider_reference')) {
-            $attributes['provider_reference'] = $providerReference;
-        }
 
         SubscriptionPayment::query()->firstOrCreate(
             [
@@ -252,6 +309,16 @@ class SubscriptionService
         string $paymentReference
     ): Subscription {
         $this->assertPurchaseAllowed($user, $plan);
+
+        // A newer attempt replaces the older one; only one row may stay pending.
+        Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('subscription_plan_id', $plan->id)
+            ->where('payment_status', 'pending')
+            ->update([
+                'payment_status' => 'failed',
+                'notes' => 'Superseded by a newer payment attempt',
+            ]);
 
         return Subscription::create([
             'user_id' => $user->id,
