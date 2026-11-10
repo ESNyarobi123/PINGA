@@ -12,6 +12,10 @@ return new class extends Migration
             $table->foreignId('job_id')->nullable()->change();
         });
 
+        if (Schema::hasColumn('conversations', 'service_request_id')) {
+            return;
+        }
+
         Schema::table('conversations', function (Blueprint $table) {
             $table->foreignId('service_request_id')
                 ->nullable()

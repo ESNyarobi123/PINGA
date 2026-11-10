@@ -98,7 +98,7 @@ class SnippePaymentService
                 'Authorization' => "Bearer {$this->apiKey}",
                 'Idempotency-Key' => $orderId,
                 'Accept' => 'application/json',
-            ])->connectTimeout(10)->timeout(30)->post("{$this->baseUrl}/v1/payments", $payload);
+            ])->connectTimeout(10)->timeout(25)->retry(1, 800)->post("{$this->baseUrl}/v1/payments", $payload);
 
             if ($response->successful()) {
                 return $response->json();

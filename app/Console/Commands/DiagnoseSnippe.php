@@ -71,15 +71,23 @@ class DiagnoseSnippe extends Command
             $this->line('Inajaribu API ya Snippe (fee preview, haitumi pesa)...');
 
             try {
+                $startedAt = microtime(true);
+
                 $response = Http::withHeaders([
                     'Authorization' => "Bearer {$key}",
                     'Accept' => 'application/json',
                 ])->connectTimeout(10)->timeout(20)->get(rtrim($apiUrl, '/').'/v1/payouts/fee', ['amount' => 1000]);
 
+                $elapsed = (int) round((microtime(true) - $startedAt) * 1000);
+
                 if ($response->successful()) {
-                    $this->info('API iko sawa: '.json_encode($response->json('data') ?? $response->json()));
+                    $this->info("API iko sawa ({$elapsed}ms): ".json_encode($response->json('data') ?? $response->json()));
+
+                    if ($elapsed > 5000) {
+                        $problems[] = "API ya Snippe inachelewa ({$elapsed}ms). Mtandao wa server kwenda api.snippe.sh ni wa polepole — malipo yanaweza kufeli kwa timeout (cURL error 28).";
+                    }
                 } else {
-                    $problems[] = 'API ya Snippe imejibu '.$response->status().': '.($response->json('message') ?? $response->body());
+                    $problems[] = "API ya Snippe imejibu {$response->status()} baada ya {$elapsed}ms: ".($response->json('message') ?? $response->body());
                 }
             } catch (\Exception $e) {
                 $problems[] = 'Imeshindwa kufikia API ya Snippe: '.$e->getMessage();
