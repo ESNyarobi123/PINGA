@@ -125,3 +125,43 @@ test('winga tomba-ombi page displays rejection reason when request is rejected',
         ->assertSee('Sababu ya kukataliwa:')
         ->assertSee('Namba imefungwa kwa sasa');
 });
+
+test('the admin withdrawals page renders the approve and pay action for pending requests', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $winga = User::factory()->create(['role' => 'winga', 'wallet_balance' => 0]);
+
+    WithdrawalRequest::create([
+        'user_id' => $winga->id,
+        'amount' => 5000,
+        'account_number' => '0715553803',
+        'network' => 'tigopesa',
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(MaombiKutoa::class)
+        ->assertSee('Idhinisha na Tuma')
+        ->assertSee('Inasubiri idhini ya admin')
+        ->assertSee('Tigo');
+});
+
+test('the admin withdrawals page shows a refunded state instead of retry for rejected requests', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $winga = User::factory()->create(['role' => 'winga', 'wallet_balance' => 0]);
+
+    $request = WithdrawalRequest::create([
+        'user_id' => $winga->id,
+        'amount' => 5000,
+        'account_number' => '0715553803',
+        'network' => 'Tigo',
+        'status' => 'rejected',
+        'payout_status' => 'failed',
+        'admin_note' => 'Namba si sahihi',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(MaombiKutoa::class)
+        ->assertSee('Imerejeshwa kwa wallet')
+        ->assertDontSee('retryWithdrawal('.$request->id.')');
+});
