@@ -187,6 +187,13 @@ class MaombiKutoa extends Component
             return;
         }
 
+        // A payout already accepted by the provider must not be sent twice.
+        if ($payment->payout_status === 'processing' && filled($payment->payout_reference)) {
+            $this->dispatch('toast', message: 'Payout hii bado inasubiri uthibitisho wa mtoa huduma. Usitume tena.', type: 'warning');
+
+            return;
+        }
+
         $snippe = app(SnippePayoutService::class);
 
         $result = $snippe->sendPayout([
@@ -308,17 +315,7 @@ class MaombiKutoa extends Component
             }
 
             // Mark corresponding withdrawal debit transaction as failed so it does not count in totalWithdrawn
-            Transaction::query()
-                ->where('user_id', $user->id)
-                ->where(function ($q) use ($locked): void {
-                    $q->where('reference', 'WD-'.$locked->id)
-                        ->orWhere(function ($sub) use ($locked): void {
-                            $sub->where('type', 'withdrawal')
-                                ->where('status', 'processing')
-                                ->where('amount', $locked->amount);
-                        });
-                })
-                ->update(['status' => 'failed']);
+            $locked->settleLedger('failed');
 
             $locked->update([
                 'status' => 'rejected',
@@ -383,19 +380,24 @@ class MaombiKutoa extends Component
             return;
         }
 
+        // Only close a payout that the provider actually accepted. A failed payout with
+        // no reference means the money never left, so marking it paid would hide a loss.
+        if ($req->payout_status === 'failed' && blank($req->payout_reference)) {
+            $this->dispatch('toast', message: 'Payout hii ilishindwa bila reference. Tumia Retry, si Complete.', type: 'error');
+
+            return;
+        }
+
         DB::transaction(function () use ($req): void {
             $req->update([
                 'status' => 'paid',
                 'payout_status' => 'completed',
+                'payout_error' => null,
                 'processed_at' => now(),
                 'processed_by' => auth()->id(),
             ]);
 
-            Transaction::query()
-                ->where('reference', 'WD-'.$req->id)
-                ->where('type', 'withdrawal')
-                ->where('status', 'processing')
-                ->update(['status' => 'completed']);
+            $req->settleLedger('completed');
         });
 
         $this->logAdminAction('complete_withdrawal', $req, [
@@ -421,10 +423,42 @@ class MaombiKutoa extends Component
             return $this->exportRequestsList($requests, 'selected_withdrawals_');
         }
 
+        if ($this->bulkAction === 'retry') {
+            $sent = 0;
+            $blocked = 0;
+
+            $service = app(WithdrawalService::class);
+
+            $requests->each(function (WithdrawalRequest $request) use ($service, &$sent, &$blocked): void {
+                // Re-read every row so a payout sent a second ago is never sent again.
+                $result = $service->retry($request->fresh());
+
+                if ($result['success']) {
+                    $sent++;
+
+                    $this->logAdminAction('retry_withdrawal', $request->fresh(), [
+                        'reference' => $result['reference'] ?? null,
+                        'bulk' => true,
+                    ]);
+                } else {
+                    $blocked++;
+                }
+            });
+
+            $this->reset(['selectedRequests', 'selectAll', 'bulkAction']);
+
+            $this->dispatch(
+                'toast',
+                message: "Retry: {$sent} imetumwa, {$blocked} imezuiwa (tayari inasindikizwa au haistahili retry).",
+                type: $blocked > 0 ? 'warning' : 'success',
+            );
+
+            return;
+        }
+
         match ($this->bulkAction) {
             'approve' => $requests->each(fn ($req) => $this->approveWithdrawal($req->id)),
             'reject' => $requests->each(fn ($req) => $this->rejectWithdrawal($req->id, 'Bulk rejection')),
-            'retry' => $requests->each(fn ($req) => $this->retryWithdrawal($req->id)),
         };
 
         $this->dispatch('toast', message: "Action executed on {$requests->count()} requests", type: 'success');

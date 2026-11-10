@@ -85,6 +85,36 @@ class SnippePayoutService
     }
 
     /**
+     * Map any stored network/method value to the code Snippe expects:
+     * Airtel | Vodacom | Tigo | Halopesa
+     *
+     * Withdrawal rows store mixed values ("Tigo", "tigopesa", "halotel", ...),
+     * so every payout has to be normalised before it reaches the API.
+     */
+    public function normaliseNetwork(?string $value, string $phone): string
+    {
+        $key = strtolower(trim((string) $value));
+
+        $map = [
+            'airtel' => 'Airtel',
+            'airtel_money' => 'Airtel',
+            'airtelmoney' => 'Airtel',
+            'vodacom' => 'Vodacom',
+            'mpesa' => 'Vodacom',
+            'm-pesa' => 'Vodacom',
+            'tigo' => 'Tigo',
+            'tigopesa' => 'Tigo',
+            'mixx' => 'Tigo',
+            'mixx by yas' => 'Tigo',
+            'yas' => 'Tigo',
+            'halopesa' => 'Halopesa',
+            'halotel' => 'Halopesa',
+        ];
+
+        return $map[$key] ?? $this->detectNetwork($phone);
+    }
+
+    /**
      * Send a payout via Snippe API.
      *
      * @param array{
@@ -99,7 +129,7 @@ class SnippePayoutService
     public function sendPayout(array $data): array
     {
         $formattedPhone = $this->formatPhone($data['phone']);
-        $network = $data['network'] ?? $this->detectNetwork($formattedPhone);
+        $network = $this->normaliseNetwork($data['network'] ?? null, $formattedPhone);
 
         $payload = [
             'amount' => (int) $data['amount'],
@@ -215,6 +245,27 @@ class SnippePayoutService
         $rawAmount = $payload['amount'] ?? $payload['data']['amount'] ?? 0;
         $amount = is_array($rawAmount) ? ($rawAmount['value'] ?? 0) : $rawAmount;
 
+        // Providers do not always echo metadata back. Fall back to the stored payout
+        // reference so a confirmed/failed payout never leaves a withdrawal stuck.
+        if (! $withdrawalId) {
+            $withdrawalId = WithdrawalRequest::query()->where('payout_reference', $reference)->value('id');
+        }
+
+        if (! $withdrawalId && ! $paymentId) {
+            $paymentId = Payment::query()->where('payout_reference', $reference)->value('id');
+        }
+
+        if (! $paymentId && ! $withdrawalId) {
+            Log::warning('Snippe Payout Webhook: could not match a ledger row', [
+                'reference' => $reference,
+                'metadata' => $metadata,
+            ]);
+
+            return;
+        }
+
+        $type = $withdrawalId ? 'withdrawal' : 'payout';
+
         match ($status) {
             'completed', 'success' => $this->handlePayoutCompleted($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
             'failed', 'error' => $this->handlePayoutFailed($reference, $type, $paymentId, $withdrawalId, $workerId, (float) $amount),
@@ -233,7 +284,7 @@ class SnippePayoutService
         ?int $workerId,
         float $amount,
     ): void {
-        DB::transaction(function () use ($reference, $paymentId, $withdrawalId): void {
+        DB::transaction(function () use ($reference, $paymentId, $withdrawalId, &$workerId): void {
             // Update job payment payout status
             if ($paymentId) {
                 Payment::where('id', $paymentId)->update(['payout_status' => 'completed']);
@@ -256,20 +307,20 @@ class SnippePayoutService
                 $withdrawal = WithdrawalRequest::query()->lockForUpdate()->find($withdrawalId);
 
                 if ($withdrawal) {
+                    $workerId = $workerId ?: $withdrawal->user_id;
+
                     $withdrawal->update([
                         'status' => 'paid',
                         'payout_reference' => $reference,
                         'payout_status' => 'completed',
+                        'payout_error' => null,
                         'processed_at' => now(),
                     ]);
-                }
 
-                // Close the withdrawal debit row so the history does not stay "processing" forever.
-                Transaction::query()
-                    ->where('reference', 'WD-'.$withdrawalId)
-                    ->where('type', 'withdrawal')
-                    ->where('status', 'processing')
-                    ->update(['status' => 'completed']);
+                    // Close every debit row for this withdrawal (including retries)
+                    // so the history does not stay "processing" forever.
+                    $withdrawal->settleLedger('completed');
+                }
             }
         });
 
@@ -321,8 +372,20 @@ class SnippePayoutService
 
                 $recipientId = $withdrawal->user_id ?: $recipientId;
 
+                // A late webhook from an older attempt must not touch the current one.
+                if (filled($withdrawal->payout_reference) && $withdrawal->payout_reference !== $reference) {
+                    Log::warning('Snippe Payout Webhook: stale reference ignored', [
+                        'withdrawal_id' => $withdrawal->id,
+                        'current' => $withdrawal->payout_reference,
+                        'incoming' => $reference,
+                    ]);
+
+                    return false;
+                }
+
                 // Already cancelled/refunded or already flagged as failed: never refund twice.
-                if (in_array($withdrawal->status, ['rejected', 'refunded'], true) || $withdrawal->payout_status === 'failed') {
+                if (in_array($withdrawal->status, ['rejected', 'refunded'], true)
+                    || in_array($withdrawal->payout_status, ['failed', 'completed'], true)) {
                     return false;
                 }
 
@@ -330,6 +393,7 @@ class SnippePayoutService
                     'status' => 'rejected',
                     'payout_status' => 'failed',
                     'payout_reference' => $reference,
+                    'payout_error' => 'Payout ilishindwa kwenye mtoa huduma ('.$reference.').',
                     'admin_note' => 'Snippe payout failed automatically.',
                     'processed_at' => now(),
                 ]);
@@ -345,17 +409,7 @@ class SnippePayoutService
                 User::whereKey($recipientId)->increment('wallet_balance', $refundAmount);
                 $workerFresh = User::find($recipientId);
 
-                Transaction::query()
-                    ->where('user_id', $recipientId)
-                    ->where(function ($q) use ($withdrawal): void {
-                        $q->where('reference', 'WD-'.$withdrawal->id)
-                            ->orWhere(function ($sub) use ($withdrawal): void {
-                                $sub->where('type', 'withdrawal')
-                                    ->where('status', 'processing')
-                                    ->where('amount', $withdrawal->amount);
-                            });
-                    })
-                    ->update(['status' => 'failed']);
+                $withdrawal->settleLedger('failed');
 
                 Transaction::create([
                     'user_id' => $recipientId,
@@ -400,8 +454,9 @@ class SnippePayoutService
             ));
         }
 
-        // Never auto-retry a withdrawal that was already refunded — that would pay twice.
-        if (! $refunded) {
+        // Auto-retry only job payouts. A withdrawal must be retried by an admin because
+        // the wallet has to be re-debited first (see WithdrawalService::retry()).
+        if (! $refunded && $paymentId) {
             RetryFailedPayout::dispatch($reference, $type, $paymentId, $withdrawalId, $workerId, $amount)
                 ->delay(now()->addHour());
         }

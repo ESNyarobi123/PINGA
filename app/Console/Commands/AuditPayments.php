@@ -79,6 +79,22 @@ class AuditPayments extends Command
         $rows[] = ['Withdrawals marked paid but payout not completed', $paidButProcessing, ''];
         $critical = $critical || $paidButProcessing > 0;
 
+        $failedWithoutError = WithdrawalRequest::query()
+            ->where('payout_status', 'failed')
+            ->whereNull('payout_error')
+            ->count();
+
+        $rows[] = ['Failed withdrawals without a stored failure reason', $failedWithoutError, ''];
+
+        $stuckProcessing = WithdrawalRequest::query()
+            ->where('payout_status', 'processing')
+            ->where('status', '!=', 'paid')
+            ->where('updated_at', '<', now()->subDays($days))
+            ->count();
+
+        $rows[] = ["Withdrawals stuck in processing for {$days} days", $stuckProcessing, ''];
+        $critical = $critical || $stuckProcessing > 0;
+
         $paidTransactionStuck = Transaction::query()
             ->where('type', 'withdrawal')
             ->where('status', 'processing')
@@ -146,20 +162,24 @@ class AuditPayments extends Command
      */
     private function repairWithdrawalLedger(): void
     {
-        $paidIds = WithdrawalRequest::query()->where('status', 'paid')->pluck('id');
-        $rejectedIds = WithdrawalRequest::query()->whereIn('status', ['rejected', 'refunded'])->pluck('id');
+        $completed = 0;
+        $failed = 0;
 
-        $completed = Transaction::query()
-            ->where('type', 'withdrawal')
-            ->where('status', 'processing')
-            ->whereIn('reference', $paidIds->map(fn (int $id) => 'WD-'.$id))
-            ->update(['status' => 'completed']);
+        WithdrawalRequest::query()
+            ->where('status', 'paid')
+            ->chunkById(200, function ($withdrawals) use (&$completed): void {
+                foreach ($withdrawals as $withdrawal) {
+                    $completed += $withdrawal->settleLedger('completed');
+                }
+            });
 
-        $failed = Transaction::query()
-            ->where('type', 'withdrawal')
-            ->where('status', 'processing')
-            ->whereIn('reference', $rejectedIds->map(fn (int $id) => 'WD-'.$id))
-            ->update(['status' => 'failed']);
+        WithdrawalRequest::query()
+            ->whereIn('status', ['rejected', 'refunded'])
+            ->chunkById(200, function ($withdrawals) use (&$failed): void {
+                foreach ($withdrawals as $withdrawal) {
+                    $failed += $withdrawal->settleLedger('failed');
+                }
+            });
 
         // Legacy rows created before references were stored: match by user, amount and creation time.
         $legacyFixed = 0;

@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Admin\MaombiKutoa;
 use App\Livewire\Admin\MigogoroDetail;
 use App\Livewire\Mteja\Wallet;
 use App\Livewire\Winga\WekaCode;
@@ -310,4 +311,167 @@ test('the payments audit command can repair stuck withdrawal ledger rows', funct
 
     expect($transaction->fresh()->status)->toBe('completed');
     expect($withdrawal->fresh()->payout_status)->toBe('completed');
+});
+test('retrying an in-flight payout never sends a second payout', function () {
+    Http::fake();
+
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
+    $withdrawal = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'approved',
+        'payout_status' => 'processing',
+        'payout_reference' => 'po_inflight_1',
+    ]);
+
+    $result = app(WithdrawalService::class)->retry($withdrawal);
+
+    expect($result['success'])->toBeFalse();
+    expect($result['error'])->toContain('inasubiri uthibitisho');
+    expect((float) $user->fresh()->wallet_balance)->toBe(20000.0);
+    Http::assertNothingSent();
+});
+
+test('a retry normalises stored network values to the codes snippe expects', function () {
+    Http::fake([
+        'api.snippe.sh/v1/payouts/send' => Http::response([
+            'status' => 'success',
+            'data' => ['id' => 'po_net_1', 'status' => 'pending'],
+        ], 200),
+    ]);
+
+    $user = User::factory()->create(['role' => 'client', 'wallet_balance' => 20000]);
+    $withdrawal = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'account_number' => '0715553803',
+        'network' => 'tigopesa',
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    app(WithdrawalService::class)->retry($withdrawal);
+
+    Http::assertSent(fn ($request) => $request['network'] === 'Tigo'
+        && $request['recipient_phone'] === '255715553803');
+});
+
+test('a failed retry stores the provider error on the withdrawal', function () {
+    Http::fake([
+        'api.snippe.sh/v1/payouts/send' => Http::response([
+            'status' => 'error',
+            'message' => 'Insufficient balance (PAY_004)',
+        ], 400),
+    ]);
+
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
+    $withdrawal = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    $result = app(WithdrawalService::class)->retry($withdrawal);
+
+    expect($result['success'])->toBeFalse();
+    expect($withdrawal->fresh()->payout_status)->toBe('failed');
+    expect($withdrawal->fresh()->payout_error)->toContain('PAY_004');
+    // The money stays held so the admin can retry again later.
+    expect((float) $user->fresh()->wallet_balance)->toBe(20000.0);
+});
+
+test('a bank transfer withdrawal is never sent as a mobile payout', function () {
+    Http::fake();
+
+    $user = User::factory()->create(['role' => 'client', 'wallet_balance' => 20000]);
+    $withdrawal = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'method' => 'bank_transfer',
+        'account_number' => '0150123456789',
+        'network' => null,
+        'status' => 'pending',
+        'payout_status' => 'pending',
+    ]);
+
+    $result = app(WithdrawalService::class)->retry($withdrawal);
+
+    expect($result['success'])->toBeFalse();
+    expect($result['error'])->toContain('benki');
+    Http::assertNothingSent();
+});
+
+test('a completed webhook closes the retry ledger row too', function () {
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 0]);
+    $withdrawal = payoutWithdrawal($user, ['charge_amount' => 0, 'payout_status' => 'processing', 'payout_reference' => 'po_ok_retry']);
+
+    $retryRow = Transaction::create([
+        'user_id' => $user->id,
+        'type' => 'withdrawal',
+        'amount' => 10000,
+        'description' => 'Retry ya kutoa pesa',
+        'balance_after' => 0,
+        'reference' => 'WD-'.$withdrawal->id.'-retry-1',
+        'status' => 'processing',
+    ]);
+
+    app(SnippePayoutService::class)->handlePayoutWebhook([
+        'id' => 'po_ok_retry',
+        'status' => 'completed',
+        'metadata' => ['type' => 'withdrawal', 'withdrawal_id' => $withdrawal->id],
+    ]);
+
+    expect($retryRow->fresh()->status)->toBe('completed');
+    expect($withdrawal->fresh()->payout_status)->toBe('completed');
+});
+
+test('a failed webhook is ignored when it belongs to an older payout attempt', function () {
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 0]);
+    $withdrawal = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'pending',
+        'payout_status' => 'processing',
+        'payout_reference' => 'po_new_attempt',
+    ]);
+
+    app(SnippePayoutService::class)->handlePayoutWebhook([
+        'id' => 'po_old_attempt',
+        'status' => 'failed',
+        'metadata' => ['type' => 'withdrawal', 'withdrawal_id' => $withdrawal->id],
+    ]);
+
+    expect((float) $user->fresh()->wallet_balance)->toBe(0.0);
+    expect($withdrawal->fresh()->status)->toBe('pending');
+});
+
+test('bulk retry skips withdrawals that are already in flight', function () {
+    Http::fake([
+        'api.snippe.sh/v1/payouts/send' => Http::response([
+            'status' => 'success',
+            'data' => ['id' => 'po_bulk_1', 'status' => 'pending'],
+        ], 200),
+    ]);
+
+    $admin = User::factory()->create(['role' => 'admin']);
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 20000]);
+
+    $inFlight = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'approved',
+        'payout_status' => 'processing',
+        'payout_reference' => 'po_already_sent',
+    ]);
+
+    $retryable = payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'pending',
+        'payout_status' => 'failed',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(MaombiKutoa::class)
+        ->set('selectedRequests', [$inFlight->id, $retryable->id])
+        ->set('bulkAction', 'retry')
+        ->call('executeBulkAction');
+
+    expect($inFlight->fresh()->payout_reference)->toBe('po_already_sent');
+    expect($retryable->fresh()->payout_status)->toBe('processing');
+    Http::assertSentCount(1);
 });

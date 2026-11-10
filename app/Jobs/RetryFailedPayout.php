@@ -39,43 +39,16 @@ class RetryFailedPayout implements ShouldQueue
                 return;
             }
 
-            // The payout webhook refunds the wallet and marks the request rejected.
-            // Retrying it automatically would pay the user a second time.
-            if (in_array($withdrawal->status, ['rejected', 'refunded'], true)) {
-                Log::info("RetryFailedPayout: withdrawal {$this->withdrawalId} was already refunded; skipping.");
+            // Never auto-retry a withdrawal: the wallet has to be re-debited first and
+            // an admin must confirm the previous payout really failed. Paying twice is
+            // worse than paying late, so this job only alerts.
+            if (in_array($withdrawal->status, ['rejected', 'refunded'], true) || $withdrawal->hasPayoutInFlight()) {
+                Log::info("RetryFailedPayout: withdrawal {$this->withdrawalId} needs a manual retry; skipping.");
 
                 return;
             }
 
-            $worker = User::find($this->workerId);
-            if (! $worker) {
-                return;
-            }
-
-            $result = $snippe->sendPayout([
-                'amount' => (int) $this->amount,
-                'phone' => $worker->phone,
-                'name' => $worker->name,
-                'narration' => 'Retry: Kutoa pesa - Winga Platform',
-                'idempotency_key' => 'retry-withdrawal-'.$this->withdrawalId.'-'.now()->timestamp,
-                'metadata' => [
-                    'type' => 'withdrawal',
-                    'user_id' => $this->workerId,
-                    'withdrawal_id' => $this->withdrawalId,
-                ],
-            ]);
-
-            if ($result['success']) {
-                $withdrawal->update([
-                    'payout_reference' => $result['reference'],
-                    'payout_status' => 'processing',
-                    'status' => 'pending',
-                ]);
-
-                Log::info("RetryFailedPayout: withdrawal {$this->withdrawalId} retried successfully.");
-            } else {
-                Log::error("RetryFailedPayout: withdrawal {$this->withdrawalId} retry failed again.", $result);
-            }
+            Log::warning("RetryFailedPayout: withdrawal {$this->withdrawalId} is waiting for an admin retry.");
 
             return;
         }
@@ -84,6 +57,12 @@ class RetryFailedPayout implements ShouldQueue
             $payment = Payment::with(['worker', 'job'])->find($this->paymentId);
 
             if (! $payment || $payment->payout_status === 'completed') {
+                return;
+            }
+
+            if ($payment->payout_status === 'processing' && filled($payment->payout_reference)) {
+                Log::info("RetryFailedPayout: payment {$this->paymentId} is still in flight; skipping.");
+
                 return;
             }
 
@@ -98,7 +77,7 @@ class RetryFailedPayout implements ShouldQueue
                 'phone' => $payment->worker->phone,
                 'name' => $payment->worker->name,
                 'narration' => 'Retry: Malipo #'.$payment->id.' - '.($payment->escrowItemLabel() ?: ($payment->job?->title ?? 'huduma')),
-                'idempotency_key' => 'retry-payout-'.$this->paymentId.'-'.now()->timestamp,
+                'idempotency_key' => 'payout-'.$payment->id.'-attempt-'.((int) $payment->retry_count + 1),
                 'metadata' => [
                     'type' => 'payout',
                     'job_id' => $payment->job_id,
@@ -111,6 +90,8 @@ class RetryFailedPayout implements ShouldQueue
                 $payment->update([
                     'payout_reference' => $result['reference'],
                     'payout_status' => 'processing',
+                    'retry_count' => ((int) $payment->retry_count) + 1,
+                    'last_retry_at' => now(),
                 ]);
 
                 Log::info("RetryFailedPayout: payment {$this->paymentId} retried successfully.");

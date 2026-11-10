@@ -207,7 +207,7 @@
                     @forelse($requests as $request)
                     @php 
                         $stats = $this->getWithdrawalStats($request);
-                        $isPaid = $request->status === 'completed' || $request->payout_status === 'completed';
+                        $isPaid = $request->status === 'completed' || $request->status === 'paid' || $request->payout_status === 'completed';
                         $isFailed = $request->payout_status === 'failed' || $request->status === 'rejected';
                         $isProcessing = $request->payout_status === 'processing';
                         $isPending = $request->status === 'pending';
@@ -244,7 +244,7 @@
                             <div class="space-y-1">
                                 <div class="flex items-center gap-2">
                                     <span class="px-2 py-1 text-xs font-bold rounded-lg bg-zinc-100 text-zinc-700">
-                                        {{ $request->network ?? 'Unknown' }}
+                                        {{ $request->networkLabel() }}
                                     </span>
                                     <span class="text-sm font-mono text-zinc-600 dark:text-zinc-400">{{ $request->account_number }}</span>
                                 </div>
@@ -253,6 +253,11 @@
                                 @endif
                                 @if($stats['retry_count'] > 0)
                                 <p class="text-xs text-amber-600">Retries: {{ $stats['retry_count'] }}</p>
+                                @endif
+                                @if($request->payout_error)
+                                <p class="text-xs text-red-600 max-w-[240px] break-words" title="{{ $request->payout_error }}">
+                                    {{ \Illuminate\Support\Str::limit($request->payout_error, 90) }}
+                                </p>
                                 @endif
                             </div>
                         </td>
@@ -286,11 +291,23 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-1">
-                                @if($isFailed)
+                                @if($isPaid)
+                                    <span class="text-xs text-green-600 font-medium">Imekamilika</span>
+                                @elseif($request->payout_status === 'failed' && in_array($request->status, ['pending', 'approved'], true))
                                 <button wire:click="retryWithdrawal({{ $request->id }})"
+                                        wire:confirm="Tuma payout ya TZS {{ number_format($request->amount) }} kwa {{ $request->networkLabel() }} {{ $request->account_number }}?"
                                         wire:loading.attr="disabled"
-                                        class="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded transition">
+                                        wire:target="retryWithdrawal({{ $request->id }})"
+                                        class="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded transition disabled:opacity-50">
                                     🔄 {{ __('messages.admin_withdrawals.retry') }}
+                                </button>
+                                @elseif($request->status === 'rejected')
+                                    <span class="text-xs text-zinc-500">Imerejeshwa kwa wallet</span>
+                                @elseif($isProcessing)
+                                <button wire:click="markAsCompleted({{ $request->id }})"
+                                        wire:confirm="{{ __('messages.admin_withdrawals.confirm_complete') }}"
+                                        class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition">
+                                    ✅ {{ __('messages.admin_withdrawals.complete') }}
                                 </button>
                                 @elseif($isPending)
                                 <button wire:click="approveWithdrawal({{ $request->id }})"
@@ -301,12 +318,6 @@
                                 <button wire:click="$set('selectedRequestId', {{ $request->id }})"
                                         class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition">
                                     ❌ {{ __('messages.admin_withdrawals.reject') }}
-                                </button>
-                                @elseif($isProcessing)
-                                <button wire:click="markAsCompleted({{ $request->id }})"
-                                        wire:confirm="{{ __('messages.admin_withdrawals.confirm_complete') }}"
-                                        class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition">
-                                    ✅ {{ __('messages.admin_withdrawals.complete') }}
                                 </button>
                                 @endif
                             </div>

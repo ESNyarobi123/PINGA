@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Transaction;
 use App\Models\WithdrawalRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WithdrawalService
 {
@@ -26,14 +27,20 @@ class WithdrawalService
             return ['success' => false, 'error' => 'Withdrawal is already paid.'];
         }
 
-        if (in_array($withdrawal->status, ['rejected', 'refunded'], true)) {
-            $reDeduct = $this->reDeductRefundedWithdrawal($withdrawal);
+        // A payout the provider already accepted is still in flight. Sending another one
+        // would pay the user twice, so wait for the webhook or reconcile it manually.
+        if ($withdrawal->hasPayoutInFlight()) {
+            return [
+                'success' => false,
+                'error' => 'Payout ya ombi hili bado inasubiri uthibitisho wa mtoa huduma. Usitume tena — thibitisha kwenye dashboard ya Snippe kwanza.',
+            ];
+        }
 
-            if (! $reDeduct['success']) {
-                return $reDeduct;
-            }
-
-            $withdrawal->refresh();
+        if ($this->isBankTransfer($withdrawal)) {
+            return [
+                'success' => false,
+                'error' => 'Ombi hili ni la benki. Linafanywa kwa mkono, hakuna payout ya simu inayotumwa.',
+            ];
         }
 
         $user = $withdrawal->user;
@@ -44,13 +51,44 @@ class WithdrawalService
 
         $phone = $withdrawal->account_number ?: ($withdrawal->phone ?: $user->phone);
 
+        if (blank($phone)) {
+            $withdrawal->update([
+                'payout_status' => 'failed',
+                'payout_error' => 'Namba ya simu ya kupokea haipo.',
+            ]);
+
+            return ['success' => false, 'error' => 'Namba ya simu ya kupokea haipo.'];
+        }
+
+        $wasRefunded = in_array($withdrawal->status, ['rejected', 'refunded'], true);
+
+        if ($wasRefunded) {
+            $reDeduct = $this->reDeductRefundedWithdrawal($withdrawal);
+
+            if (! $reDeduct['success']) {
+                return $reDeduct;
+            }
+
+            $withdrawal->refresh();
+        }
+
+        $attempt = ((int) $withdrawal->retry_count) + 1;
+
+        // Flag the attempt as in-flight before the HTTP call so a double click cannot
+        // start a second payout while the first one is still running.
+        $withdrawal->update([
+            'payout_status' => 'processing',
+            'payout_error' => null,
+            'last_retry_at' => now(),
+        ]);
+
         $result = $this->snippe->sendPayout([
             'amount' => (int) $withdrawal->amount,
             'phone' => (string) $phone,
             'name' => $withdrawal->account_name ?: $user->name,
-            'network' => $withdrawal->network ?: $this->snippe->detectNetwork((string) $phone),
+            'network' => $this->snippe->normaliseNetwork($withdrawal->network ?: $withdrawal->method, (string) $phone),
             'narration' => 'Kutoa pesa - Winga Platform',
-            'idempotency_key' => 'retry-withdrawal-'.$withdrawal->id.'-'.now()->timestamp,
+            'idempotency_key' => 'withdrawal-'.$withdrawal->id.'-attempt-'.$attempt,
             'metadata' => [
                 'type' => 'withdrawal',
                 'user_id' => $withdrawal->user_id,
@@ -62,12 +100,17 @@ class WithdrawalService
             $withdrawal->update([
                 'payout_reference' => $result['reference'],
                 'payout_status' => 'processing',
-                'status' => 'pending',
-                'retry_count' => ($withdrawal->retry_count ?? 0) + 1,
+                'payout_error' => null,
+                'retry_count' => $attempt,
                 'last_retry_at' => now(),
             ]);
         } else {
-            $withdrawal->update(['payout_status' => 'failed']);
+            $withdrawal->update([
+                'payout_status' => 'failed',
+                'payout_error' => Str::limit((string) ($result['error'] ?? 'Payout imeshindwa bila maelezo.'), 480),
+                'retry_count' => $attempt,
+                'last_retry_at' => now(),
+            ]);
         }
 
         return $result;
@@ -87,7 +130,9 @@ class WithdrawalService
             return ['success' => false, 'error' => 'Salio la mtumiaji halitoshi kwa retry hii.'];
         }
 
-        DB::transaction(function () use ($withdrawal, $user, $total): void {
+        $attempt = ((int) $withdrawal->retry_count) + 1;
+
+        DB::transaction(function () use ($withdrawal, $user, $total, $attempt): void {
             $user->decrement('wallet_balance', $total);
 
             Transaction::create([
@@ -96,7 +141,7 @@ class WithdrawalService
                 'amount' => $total,
                 'description' => 'Retry ya kutoa pesa (#'.$withdrawal->id.')',
                 'balance_after' => $user->fresh()->wallet_balance,
-                'reference' => 'WD-'.$withdrawal->id.'-retry-'.now()->timestamp,
+                'reference' => 'WD-'.$withdrawal->id.'-retry-'.$attempt,
                 'status' => 'processing',
             ]);
 
@@ -108,5 +153,10 @@ class WithdrawalService
         });
 
         return ['success' => true];
+    }
+
+    private function isBankTransfer(WithdrawalRequest $withdrawal): bool
+    {
+        return strtolower((string) $withdrawal->method) === 'bank_transfer';
     }
 }
