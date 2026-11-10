@@ -258,6 +258,10 @@
                                 <p class="text-xs text-red-600 max-w-[240px] break-words" title="{{ $request->payout_error }}">
                                     {{ \Illuminate\Support\Str::limit($request->payout_error, 90) }}
                                 </p>
+                                @elseif($request->payout_status === 'failed')
+                                <p class="text-xs text-amber-700 max-w-[240px] break-words">
+                                    Sababu haikurekodiwa (payout ya kabla ya 10 Nov). Thibitisha kwenye Snippe dashboard kabla ya retry.
+                                </p>
                                 @endif
                             </div>
                         </td>

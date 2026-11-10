@@ -21,6 +21,7 @@ class AuditPayments extends Command
         $rate = (float) SettingsService::commissionRate();
         $rows = [];
         $critical = false;
+        $warnings = 0;
 
         if ($this->option('fix')) {
             $this->repairWithdrawalLedger();
@@ -82,9 +83,10 @@ class AuditPayments extends Command
         $failedWithoutError = WithdrawalRequest::query()
             ->where('payout_status', 'failed')
             ->whereNull('payout_error')
-            ->count();
+            ->pluck('id');
 
-        $rows[] = ['Failed withdrawals without a stored failure reason', $failedWithoutError, ''];
+        $rows[] = ['Failed withdrawals without a stored failure reason', $failedWithoutError->count(), $failedWithoutError->take(10)->implode(', ')];
+        $warnings += $failedWithoutError->count();
 
         $stuckProcessing = WithdrawalRequest::query()
             ->where('payout_status', 'processing')
@@ -150,6 +152,13 @@ class AuditPayments extends Command
             $this->warn('Audit found issues that need attention.');
 
             return self::FAILURE;
+        }
+
+        if ($warnings > 0) {
+            $this->info('Hakuna pesa iliyopotea. Kuna note '.$warnings.' ya uchunguzi (sio hitilafu ya ledger).');
+            $this->line('Kumbuka: withdrawals zilizofeli kabla ya 10 Nov 2026 hazina sababu iliyorekodiwa — angalia kwenye Snippe dashboard.');
+
+            return self::SUCCESS;
         }
 
         $this->info('No payment inconsistencies detected.');

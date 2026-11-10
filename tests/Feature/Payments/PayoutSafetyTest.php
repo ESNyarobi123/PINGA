@@ -475,3 +475,18 @@ test('bulk retry skips withdrawals that are already in flight', function () {
     expect($retryable->fresh()->payout_status)->toBe('processing');
     Http::assertSentCount(1);
 });
+test('the audit summary separates informational notes from ledger failures', function () {
+    $user = User::factory()->create(['role' => 'winga', 'wallet_balance' => 0]);
+    payoutWithdrawal($user, [
+        'charge_amount' => 0,
+        'status' => 'pending',
+        'payout_status' => 'failed',
+        'payout_error' => null,
+    ]);
+
+    // A legacy failed row is a note, not a ledger error: the command still succeeds
+    // but must not claim there is nothing to look at.
+    $this->artisan('payments:audit')
+        ->expectsOutputToContain('note 1')
+        ->assertExitCode(0);
+});
